@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../core/theme/app_colors.dart';
-import '../../core/theme/app_text_styles.dart';
 import 'dashboard/dashboard_screen.dart';
 import 'products/products_screen.dart';
 import 'sales/sales_screen.dart';
 import 'alerts/alerts_screen.dart';
+import 'history/history_screen.dart';
+import 'tpv/tpv_screen.dart';
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
@@ -15,18 +16,25 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   int _currentIndex = 0;
+  late final List<Widget> _screens;
 
-  final _screens = const [
-    DashboardScreen(),
-    ProductsScreen(),
-    SalesScreen(),
-    AlertsScreen(),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _screens = [
+      DashboardScreen(onGoToAlerts: () => _onTap(3)),
+      ProductsScreen(),
+      SalesScreen(),
+      AlertsScreen(),
+      HistoryScreen(),
+      TpvScreen(),
+    ];
+  }
 
   void _onTap(int index) {
-  HapticFeedback.selectionClick();
-  setState(() => _currentIndex = index);
-}
+    HapticFeedback.selectionClick();
+    setState(() => _currentIndex = index);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -61,6 +69,16 @@ class _MainShellState extends State<MainShell> {
               icon: Icon(Icons.notifications_outlined),
               activeIcon: Icon(Icons.notifications_rounded),
               label: 'Alertas',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.calendar_month_outlined),
+              activeIcon: Icon(Icons.calendar_month_rounded),
+              label: 'Histórico',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.point_of_sale_outlined),
+              activeIcon: Icon(Icons.point_of_sale_rounded),
+              label: 'TPV API',
             ),
           ],
         ),

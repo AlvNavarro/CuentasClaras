@@ -12,7 +12,9 @@ import '../../../data/services/supabase_service.dart';
 import '../../widgets/common_widgets.dart';
 
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key});
+  const DashboardScreen({super.key, this.onGoToAlerts});
+  final VoidCallback? onGoToAlerts;
+
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
@@ -324,28 +326,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _lowStockSection() {
-    final items = _metrics!.topLowStock;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SectionHeader(
-          title: 'Alertas de stock',
-          action: () {},
-          actionLabel: 'Ver todas',
-        ),
-        const SizedBox(height: 12),
-        ...items.asMap().entries.map(
-              (e) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: AlertTile(product: e.value)
-                    .animate()
-                    .fadeIn(delay: Duration(milliseconds: 300 + e.key * 60))
-                    .slideX(begin: 0.05, end: 0),
-              ),
+  final items = _metrics!.topLowStock;
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      SectionHeader(
+        title: 'Alertas de stock',
+        action: widget.onGoToAlerts,
+        actionLabel: 'Ver todas',
+      ),
+      const SizedBox(height: 12),
+      ...items.asMap().entries.map(
+            (e) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: AlertTile(product: e.value)
+                  .animate()
+                  .fadeIn(delay: Duration(milliseconds: 300 + e.key * 60))
+                  .slideX(begin: 0.05, end: 0),
             ),
-      ],
-    );
-  }
+          ),
+    ],
+  );
+}
 
   Widget _recentSalesSection() {
     final sales = _metrics!.recentSales.take(5).toList();

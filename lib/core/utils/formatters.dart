@@ -10,15 +10,16 @@ class Formatters {
   );
   static final NumberFormat _integer = NumberFormat('#,##0', 'es_ES');
   static final DateFormat _dateShort = DateFormat('d MMM', 'es_ES');
-  static final DateFormat _dateLong =
-      DateFormat("d 'de' MMMM 'de' y", 'es_ES');
+  static final DateFormat _dateLong = DateFormat("d 'de' MMMM 'de' y", 'es_ES');
   static final DateFormat _dateTime = DateFormat('d MMM · HH:mm', 'es_ES');
+  static final DateFormat _time = DateFormat('HH:mm', 'es_ES'); // ← añadido
 
   static String money(num value) => _currency.format(value);
   static String integer(num value) => _integer.format(value);
   static String dateShort(DateTime d) => _dateShort.format(d);
   static String dateLong(DateTime d) => _dateLong.format(d);
   static String dateTime(DateTime d) => _dateTime.format(d);
+  static String time(DateTime d) => _time.format(d); // ← añadido
 
   static String relative(DateTime date) {
     final diff = DateTime.now().difference(date);
