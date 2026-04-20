@@ -336,7 +336,7 @@ class _NewSaleSheetState extends State<_NewSaleSheet> {
   PaymentMethod _method = PaymentMethod.cash;
   bool _loading = true;
   bool _saving = false;
-  bool _scanning = false; // ← estado del escáner
+  bool _scanning = false; 
   final _search = TextEditingController();
   List<Product> _filtered = [];
 
@@ -385,7 +385,7 @@ class _NewSaleSheetState extends State<_NewSaleSheet> {
   void _openScanner() => setState(() => _scanning = true);
 
   void _handleBarcode(String barcode) async {
-    if (!_scanning) return; // evitar múltiples lecturas
+    if (!_scanning) return; 
     setState(() => _scanning = false);
 
     final product = await widget.repo.getProductByBarcode(barcode);

@@ -23,7 +23,7 @@ class _AlertsScreenState extends State<AlertsScreen>
   List<AppNotification> _notifications = [];
   bool _loading = true;
   late TabController _tabs;
-  late StreamSubscription _sub; // ← suscripción al stream
+  late StreamSubscription _sub;
 
   @override
   void initState() {
@@ -45,7 +45,7 @@ class _AlertsScreenState extends State<AlertsScreen>
 
   @override
   void dispose() {
-    _sub.cancel(); // ← cancelar suscripción al salir
+    _sub.cancel();
     _tabs.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();

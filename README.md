@@ -8,7 +8,7 @@
 
 ## Acceso a la aplicación
 
-Para acceder a la demo funcional usa las siguientes credenciales:
+Para acceder a la aplicación usa las siguientes credenciales:
 
 | Campo | Valor |
 |---|---|
@@ -37,16 +37,3 @@ La app ofrece una solución digital, sencilla y accesible desde el móvil que cu
 | **Alertas** | Notificaciones automáticas de stock bajo y productos agotados |
 
 ---
-
-## Stack tecnológico
-
-- **Frontend**: Flutter 3.x / Dart — Material Design 3
-- **Backend**: Supabase (PostgreSQL + Auth + Row Level Security)
-- **Navegación**: go_router
-- **Gráficas**: fl_chart
-- **Animaciones**: flutter_animate
-- **Tipografía**: Fraunces + Plus Jakarta Sans
-
----
-
-## Arquitectura
