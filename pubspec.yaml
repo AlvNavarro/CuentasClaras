@@ -13,18 +13,10 @@ dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.8
-
-  # Backend
   supabase_flutter: ^2.5.6
-
-  # State management
   flutter_bloc: ^8.1.5
   equatable: ^2.0.5
-
-  # Navigation
   go_router: ^14.2.0
-
-  # UI
   google_fonts: ^6.2.1
   fl_chart: ^0.68.0
   shimmer: ^3.0.0
@@ -32,6 +24,7 @@ dependencies:
   flutter_animate: ^4.5.0
   badges: ^3.1.2
   lottie: ^3.1.0
+  flutter_local_notifications: ^17.2.2
 
   # Utilities
   intl: ^0.20.2

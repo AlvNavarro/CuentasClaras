@@ -7,7 +7,9 @@ import 'package:cuentas_claras/core/utils/formatters.dart';
 import 'package:cuentas_claras/data/models/product.dart';
 import 'package:cuentas_claras/data/models/sale.dart';
 import 'package:cuentas_claras/data/repositories/inventory_repository.dart';
+import 'package:cuentas_claras/data/services/supabase_service.dart'; 
 import 'package:cuentas_claras/presentation/widgets/common_widgets.dart';
+import 'package:cuentas_claras/presentation/screens/products/products_screen.dart';
 
 class AlertsScreen extends StatefulWidget {
   const AlertsScreen({super.key});
@@ -31,8 +33,6 @@ class _AlertsScreenState extends State<AlertsScreen>
     _tabs = TabController(length: 2, vsync: this);
     WidgetsBinding.instance.addObserver(this);
     _load();
-
-    // Se recarga automáticamente cada vez que cambia el stock
     _sub = InventoryRepository.instance.onStockChanged.listen((_) {
       if (mounted) _load();
     });
@@ -62,6 +62,23 @@ class _AlertsScreenState extends State<AlertsScreen>
         _loading = false;
       });
     }
+  }
+
+  Future<void> _openProduct(Product product) async {
+    final categories = await _repo.getCategories();
+    if (!mounted) return;
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => ProductDetail(
+        product: product,
+        repo: _repo,
+        categories: categories,
+        onUpdate: _load,
+        isAdmin: SupabaseService.instance.isAdmin, 
+      ),
+    );
+    _load();
   }
 
   @override
@@ -140,7 +157,10 @@ class _AlertsScreenState extends State<AlertsScreen>
             ..._outOfStock.asMap().entries.map(
                   (e) => Padding(
                     padding: const EdgeInsets.only(bottom: 8),
-                    child: AlertTile(product: e.value)
+                    child: AlertTile(
+                      product: e.value,
+                      onTap: () => _openProduct(e.value),
+                    )
                         .animate()
                         .fadeIn(delay: Duration(milliseconds: e.key * 50)),
                   ),
@@ -153,7 +173,10 @@ class _AlertsScreenState extends State<AlertsScreen>
             ..._lowStock.asMap().entries.map(
                   (e) => Padding(
                     padding: const EdgeInsets.only(bottom: 8),
-                    child: AlertTile(product: e.value)
+                    child: AlertTile(
+                      product: e.value,
+                      onTap: () => _openProduct(e.value),
+                    )
                         .animate()
                         .fadeIn(
                             delay: Duration(milliseconds: e.key * 50 + 100)),

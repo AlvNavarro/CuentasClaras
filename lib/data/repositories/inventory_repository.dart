@@ -4,17 +4,16 @@ import '../models/product.dart';
 import '../models/sale.dart';
 import '../services/supabase_service.dart';
 import '../../core/constants/app_constants.dart';
+import '../../core/services/notification_service.dart';
 
 class InventoryRepository {
-  // SINGLETON
   static final InventoryRepository instance = InventoryRepository._internal();
   factory InventoryRepository() => instance;
-  InventoryRepository._internal(); // ← sin _seedMockData()
+  InventoryRepository._internal();
 
-  final bool useMock = false; // ← Supabase real
+  final bool useMock = false;
   final _uuid = const Uuid();
 
-  // Stream para notificar cambios en tiempo real a todas las pantallas
   final _stockChangeController = StreamController<void>.broadcast();
   Stream<void> get onStockChanged => _stockChangeController.stream;
 
@@ -70,7 +69,6 @@ class InventoryRepository {
     }
     final data = await query.order('name');
     var products = (data as List).map((e) => Product.fromJson(e)).toList();
-    // Filtro de stock bajo en cliente para evitar problema con columnas
     if (lowStockOnly == true) {
       products = products.where((p) => p.hasAlert).toList();
     }
@@ -124,89 +122,97 @@ class InventoryRepository {
   }
 
   Future<void> adjustStock(String productId, int delta) async {
-  try {
-    final data = await SupabaseService.instance.client
-        .from(AppConstants.tableProducts)
-        .select()
-        .eq('id', productId)
-        .single();
-    final p = Product.fromJson(data);
-    final newStock = (p.stock + delta).clamp(0, 999999);
+    try {
+      final data = await SupabaseService.instance.client
+          .from(AppConstants.tableProducts)
+          .select()
+          .eq('id', productId)
+          .single();
+      final p = Product.fromJson(data);
+      final newStock = (p.stock + delta).clamp(0, 999999);
 
-    await SupabaseService.instance.client
-        .from(AppConstants.tableProducts)
-        .update({
-          'stock': newStock,
-          'updated_at': DateTime.now().toIso8601String(),
-        })
-        .eq('id', productId);
-
-    final updated = p.copyWith(stock: newStock);
-    if (updated.hasAlert) {
-      final userId = SupabaseService.instance.currentUserId ?? '';
       await SupabaseService.instance.client
-          .from(AppConstants.tableNotifications)
-          .insert({
-            'user_id': userId,
-            'product_id': productId,
-            'product_name': p.name,
-            'message': updated.isOutOfStock
-                ? '${p.name} está AGOTADO. Realiza un pedido urgente.'
-                : '${p.name} tiene solo $newStock ${p.unit}(s) disponibles. Mínimo: ${p.stockMin}.',
-            'current_stock': newStock,
-            'is_read': false,
-          });
-    }
+          .from(AppConstants.tableProducts)
+          .update({
+            'stock': newStock,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', productId);
 
-    _stockChangeController.add(null);
-  } catch (e) {
-    print('❌ ERROR adjustStock ($productId): $e');
-    rethrow;
+      final updated = p.copyWith(stock: newStock);
+      if (updated.hasAlert) {
+        final userId = SupabaseService.instance.currentUserId ?? '';
+        await SupabaseService.instance.client
+            .from(AppConstants.tableNotifications)
+            .insert({
+              'user_id': userId,
+              'product_id': productId,
+              'product_name': p.name,
+              'message': updated.isOutOfStock
+                  ? '${p.name} está AGOTADO. Realiza un pedido urgente.'
+                  : '${p.name} tiene solo $newStock ${p.unit}(s) disponibles. Mínimo: ${p.stockMin}.',
+              'current_stock': newStock,
+              'is_read': false,
+            });
+
+        // Notificación local en la barra del móvil
+        await NotificationService.instance.showStockAlert(
+          productName: p.name,
+          currentStock: newStock,
+          isOutOfStock: newStock == 0,
+        );
+      }
+
+      _stockChangeController.add(null);
+    } catch (e) {
+      print('❌ ERROR adjustStock ($productId): $e');
+      rethrow;
+    }
   }
-}
 
   // ─── VENTAS ──────────────────────────────────────────────────
 
   Future<Sale> createSale({
-  required List<SaleItem> items,
-  required PaymentMethod paymentMethod,
-  String? notes,
-}) async {
-  try {
-    final total = items.fold<double>(0, (s, i) => s + i.subtotal);
-    final userId = SupabaseService.instance.currentUserId ?? '';
-    final saleId = _uuid.v4();
+    required List<SaleItem> items,
+    required PaymentMethod paymentMethod,
+    String? notes,
+  }) async {
+    try {
+      final total = items.fold<double>(0, (s, i) => s + i.subtotal);
+      final userId = SupabaseService.instance.currentUserId ?? '';
+      final saleId = _uuid.v4();
 
-    print('📦 Creando venta para usuario: $userId');
-    print('📦 Items: ${items.length}');
+      print('📦 Creando venta para usuario: $userId');
+      print('📦 Items: ${items.length}');
 
-    for (final item in items) {
-      print('📦 Ajustando stock de ${item.productId} en ${-item.quantity}');
-      await adjustStock(item.productId, -item.quantity);
+      for (final item in items) {
+        print('📦 Ajustando stock de ${item.productId} en ${-item.quantity}');
+        await adjustStock(item.productId, -item.quantity);
+      }
+
+      print('💾 Insertando venta en Supabase...');
+      final result = await SupabaseService.instance.client
+          .from(AppConstants.tableSales)
+          .insert({
+            'id': saleId,
+            'user_id': userId,
+            'total': total,
+            'payment_method': paymentMethod.name,
+            'notes': notes,
+            'items': items.map((e) => e.toJson()).toList(),
+          })
+          .select()
+          .single();
+
+      print('✅ Venta creada correctamente: $saleId');
+      _stockChangeController.add(null);
+      return Sale.fromJson(result);
+    } catch (e) {
+      print('❌ ERROR createSale: $e');
+      rethrow;
     }
-
-    print('💾 Insertando venta en Supabase...');
-    final result = await SupabaseService.instance.client
-        .from(AppConstants.tableSales)
-        .insert({
-          'id': saleId,
-          'user_id': userId,
-          'total': total,
-          'payment_method': paymentMethod.name,
-          'notes': notes,
-          'items': items.map((e) => e.toJson()).toList(),
-        })
-        .select()
-        .single();
-
-    print('✅ Venta creada correctamente: $saleId');
-    _stockChangeController.add(null);
-    return Sale.fromJson(result);
-  } catch (e) {
-    print('❌ ERROR createSale: $e');
-    rethrow;
   }
-}
+
   Future<List<Sale>> getSales({DateTime? since, int? limit}) async {
     var query = SupabaseService.instance.client
         .from(AppConstants.tableSales)

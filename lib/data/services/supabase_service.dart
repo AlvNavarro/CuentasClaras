@@ -19,6 +19,19 @@ class SupabaseService {
   bool get isSignedIn => currentUser != null;
   String? get currentUserId => currentUser?.id;
 
+  // ─── ROL ─────────────────────────────────────────────────────
+  String get userRole =>
+      currentUser?.userMetadata?['role'] as String? ?? 'employee';
+  bool get isAdmin => userRole == 'admin';
+
+  // ─── OWNER ID ────────────────────────────────────────────────
+  // Admin → su propio ID. Empleado → el ID del admin (owner_id)
+  String get ownerId {
+    if (isAdmin) return currentUserId ?? '';
+    return currentUser?.userMetadata?['owner_id'] as String? ??
+        currentUserId ?? '';
+  }
+
   Future<AuthResponse> signInWithEmail(String email, String password) =>
       auth.signInWithPassword(email: email, password: password);
 
