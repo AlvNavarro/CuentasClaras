@@ -1,8 +1,16 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:share_plus/share_plus.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/utils/download_helper.dart';
 import '../../../data/models/sale.dart';
 import '../../../data/repositories/inventory_repository.dart';
 import '../../widgets/common_widgets.dart';
@@ -32,12 +40,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   List<Sale> get _selectedDaySales => _allSales.where((s) =>
-      s.createdAt.year == _selectedDay.year &&
-      s.createdAt.month == _selectedDay.month &&
-      s.createdAt.day == _selectedDay.day).toList();
+      s.createdAt.toLocal().year == _selectedDay.year &&
+      s.createdAt.toLocal().month == _selectedDay.month &&
+      s.createdAt.toLocal().day == _selectedDay.day).toList();
 
-  Set<String> get _daysWithSales => _allSales.map((s) =>
-      '${s.createdAt.year}-${s.createdAt.month}-${s.createdAt.day}').toSet();
+  Set<String> get _daysWithSales => _allSales.map((s) {
+    final local = s.createdAt.toLocal();
+    return '${local.year}-${local.month}-${local.day}';
+  }).toSet();
 
   bool _hasSales(DateTime day) =>
       _daysWithSales.contains('${day.year}-${day.month}-${day.day}');
@@ -61,28 +71,21 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final firstDay = DateTime(_focusedMonth.year, _focusedMonth.month, 1);
     final lastDay = DateTime(_focusedMonth.year, _focusedMonth.month + 1, 0);
     final List<DateTime?> days = [];
-
     final startWeekday = firstDay.weekday - 1;
-    for (int i = 0; i < startWeekday; i++) {
-      days.add(null);
-    }
+    for (int i = 0; i < startWeekday; i++) { days.add(null); }
     for (int i = 1; i <= lastDay.day; i++) {
       days.add(DateTime(_focusedMonth.year, _focusedMonth.month, i));
     }
     return days;
   }
 
-  void _previousMonth() {
-    setState(() {
-      _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1);
-    });
-  }
+  void _previousMonth() => setState(() {
+    _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1);
+  });
 
-  void _nextMonth() {
-    setState(() {
-      _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1);
-    });
-  }
+  void _nextMonth() => setState(() {
+    _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -146,7 +149,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Widget _calendarHeader() {
-    final monthNames = [
+    const monthNames = [
       'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
       'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
     ];
@@ -187,7 +190,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
   Widget _calendarGrid() {
     final days = _calendarDays;
     final rows = (days.length / 7).ceil();
-
     return Column(
       children: List.generate(rows, (rowIndex) {
         return Padding(
@@ -202,7 +204,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
               final selected = _isSelected(day);
               final today = _isToday(day);
               final hasSales = _hasSales(day);
-
               return Expanded(
                 child: GestureDetector(
                   onTap: () => setState(() => _selectedDay = day),
@@ -237,8 +238,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                           Positioned(
                             bottom: 4,
                             child: Container(
-                              width: 5,
-                              height: 5,
+                              width: 5, height: 5,
                               decoration: const BoxDecoration(
                                 color: AppColors.success,
                                 shape: BoxShape.circle,
@@ -249,8 +249,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                           Positioned(
                             bottom: 4,
                             child: Container(
-                              width: 5,
-                              height: 5,
+                              width: 5, height: 5,
                               decoration: BoxDecoration(
                                 color: AppColors.onPrimary.withOpacity(0.6),
                                 shape: BoxShape.circle,
@@ -278,10 +277,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(Formatters.dateLong(_selectedDay), style: AppTextStyles.h3),
-              Text(
-                '$count venta${count == 1 ? '' : 's'}',
-                style: AppTextStyles.caption,
-              ),
+              Text('$count venta${count == 1 ? '' : 's'}',
+                  style: AppTextStyles.caption),
             ],
           ),
         ),
@@ -303,7 +300,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
 }
 
 // ─── SALE HISTORY TILE ────────────────────────────────────────────────────────
-
 class _SaleHistoryTile extends StatelessWidget {
   const _SaleHistoryTile({required this.sale, required this.index});
   final Sale sale;
@@ -324,17 +320,14 @@ class _SaleHistoryTile extends StatelessWidget {
           Row(
             children: [
               Container(
-                width: 36,
-                height: 36,
+                width: 36, height: 36,
                 decoration: BoxDecoration(
                   color: AppColors.amberContainer,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Center(
-                  child: Text(
-                    sale.paymentMethod.icon,
-                    style: const TextStyle(fontSize: 18),
-                  ),
+                  child: Text(sale.paymentMethod.icon,
+                      style: const TextStyle(fontSize: 18)),
                 ),
               ),
               const SizedBox(width: 12),
@@ -342,21 +335,15 @@ class _SaleHistoryTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Venta #$index · ${sale.paymentMethod.label}',
-                      style: AppTextStyles.label,
-                    ),
-                    Text(
-                      Formatters.time(sale.createdAt),
-                      style: AppTextStyles.caption,
-                    ),
+                    Text('Venta #$index · ${sale.paymentMethod.label}',
+                        style: AppTextStyles.label),
+                    Text(Formatters.time(sale.createdAt),
+                        style: AppTextStyles.caption),
                   ],
                 ),
               ),
-              Text(
-                Formatters.money(sale.total),
-                style: AppTextStyles.price(color: AppColors.amber, size: 16),
-              ),
+              Text(Formatters.money(sale.total),
+                  style: AppTextStyles.price(color: AppColors.amber, size: 16)),
             ],
           ),
           const SizedBox(height: 12),
@@ -368,35 +355,28 @@ class _SaleHistoryTile extends StatelessWidget {
               child: Row(
                 children: [
                   Container(
-                    width: 22,
-                    height: 22,
+                    width: 22, height: 22,
                     decoration: BoxDecoration(
                       color: AppColors.surfaceVariant,
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Center(
-                      child: Text(
-                        '${item.quantity}',
-                        style: AppTextStyles.caption.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
+                      child: Text('${item.quantity}',
+                          style: AppTextStyles.caption.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textSecondary,
+                          )),
                     ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text(
-                      item.productName,
-                      style: AppTextStyles.body,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                    child: Text(item.productName,
+                        style: AppTextStyles.body,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
                   ),
-                  Text(
-                    Formatters.money(item.subtotal),
-                    style: AppTextStyles.bodySm,
-                  ),
+                  Text(Formatters.money(item.subtotal),
+                      style: AppTextStyles.bodySm),
                 ],
               ),
             ),
@@ -405,13 +385,11 @@ class _SaleHistoryTile extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              Text(
-                'Ver ticket →',
-                style: AppTextStyles.caption.copyWith(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
+              Text('Ver ticket →',
+                  style: AppTextStyles.caption.copyWith(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w700,
+                  )),
             ],
           ),
         ],
@@ -421,10 +399,173 @@ class _SaleHistoryTile extends StatelessWidget {
 }
 
 // ─── TICKET DETAIL ────────────────────────────────────────────────────────────
-
 class _TicketDetail extends StatelessWidget {
   const _TicketDetail({required this.sale});
   final Sale sale;
+
+  String _moneyPdf(double amount) {
+    final formatted = amount.toStringAsFixed(2).replaceAll('.', ',');
+    return '$formatted EUR';
+  }
+
+  Future<void> _shareTicket(BuildContext context) async {
+    try {
+      final fontData =
+          await rootBundle.load('assets/fonts/Roboto-Regular.ttf');
+      final ttf = pw.Font.ttf(fontData);
+      final fontBoldData =
+          await rootBundle.load('assets/fonts/Roboto-Bold.ttf');
+      final ttfBold = pw.Font.ttf(fontBoldData);
+      final theme = pw.ThemeData.withFont(base: ttf, bold: ttfBold);
+
+      final pdf = pw.Document();
+      final ticketId = sale.id
+          .substring(0, sale.id.length < 8 ? sale.id.length : 8)
+          .toUpperCase();
+
+      pdf.addPage(
+        pw.Page(
+          theme: theme,
+          pageFormat: PdfPageFormat.a5,
+          margin: const pw.EdgeInsets.all(32),
+          build: (pw.Context ctx) {
+            return pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.center,
+              children: [
+                pw.Text('CuentasClaras',
+                    style: pw.TextStyle(
+                        fontSize: 22, fontWeight: pw.FontWeight.bold)),
+                pw.SizedBox(height: 6),
+                pw.Text(Formatters.dateTime(sale.createdAt),
+                    style: const pw.TextStyle(fontSize: 11)),
+                pw.Text('No $ticketId',
+                    style: pw.TextStyle(
+                        fontSize: 10, color: PdfColors.grey600)),
+                pw.SizedBox(height: 16),
+                pw.Divider(),
+                pw.SizedBox(height: 12),
+                pw.Row(children: [
+                  pw.Expanded(
+                      child: pw.Text('PRODUCTO',
+                          style: pw.TextStyle(
+                              fontSize: 9,
+                              fontWeight: pw.FontWeight.bold))),
+                  pw.Text('CANT.',
+                      style: pw.TextStyle(
+                          fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                  pw.SizedBox(width: 16),
+                  pw.SizedBox(
+                    width: 60,
+                    child: pw.Text('IMPORTE',
+                        style: pw.TextStyle(
+                            fontSize: 9, fontWeight: pw.FontWeight.bold),
+                        textAlign: pw.TextAlign.right),
+                  ),
+                ]),
+                pw.SizedBox(height: 8),
+                ...sale.items.map((item) => pw.Padding(
+                      padding: const pw.EdgeInsets.only(bottom: 8),
+                      child: pw.Row(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          pw.Expanded(
+                            child: pw.Column(
+                              crossAxisAlignment: pw.CrossAxisAlignment.start,
+                              children: [
+                                pw.Text(item.productName,
+                                    style: pw.TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: pw.FontWeight.bold)),
+                                pw.Text(
+                                    '${_moneyPdf(item.unitPrice)} x ${item.quantity}',
+                                    style: const pw.TextStyle(
+                                        fontSize: 9,
+                                        color: PdfColors.grey600)),
+                              ],
+                            ),
+                          ),
+                          pw.SizedBox(width: 8),
+                          pw.Text('${item.quantity}',
+                              style: const pw.TextStyle(
+                                  fontSize: 11, color: PdfColors.grey600)),
+                          pw.SizedBox(width: 16),
+                          pw.SizedBox(
+                            width: 60,
+                            child: pw.Text(_moneyPdf(item.subtotal),
+                                style: pw.TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: pw.FontWeight.bold),
+                                textAlign: pw.TextAlign.right),
+                          ),
+                        ],
+                      ),
+                    )),
+                pw.SizedBox(height: 8),
+                pw.Divider(),
+                pw.SizedBox(height: 12),
+                pw.Row(children: [
+                  pw.Expanded(
+                      child: pw.Text('TOTAL',
+                          style: pw.TextStyle(
+                              fontSize: 16,
+                              fontWeight: pw.FontWeight.bold))),
+                  pw.Text(_moneyPdf(sale.total),
+                      style: pw.TextStyle(
+                          fontSize: 18, fontWeight: pw.FontWeight.bold)),
+                ]),
+                pw.SizedBox(height: 8),
+                pw.Row(children: [
+                  pw.Expanded(
+                      child: pw.Text('Metodo de pago',
+                          style: const pw.TextStyle(
+                              fontSize: 10, color: PdfColors.grey600))),
+                  pw.Text(sale.paymentMethod.label,
+                      style: pw.TextStyle(
+                          fontSize: 10, fontWeight: pw.FontWeight.bold)),
+                ]),
+                pw.SizedBox(height: 24),
+                pw.Divider(),
+                pw.SizedBox(height: 12),
+                pw.Text('Gracias por tu compra!',
+                    style: const pw.TextStyle(
+                        fontSize: 11, color: PdfColors.grey600)),
+                pw.SizedBox(height: 4),
+                pw.Text(
+                    'CuentasClaras - Tu negocio, sin cuentas pendientes.',
+                    style: const pw.TextStyle(
+                        fontSize: 9, color: PdfColors.grey500),
+                    textAlign: pw.TextAlign.center),
+              ],
+            );
+          },
+        ),
+      );
+
+      final bytes = await pdf.save();
+
+      if (kIsWeb) {
+        downloadPdfWeb(bytes, 'ticket_$ticketId.pdf');
+      } else {
+        final dir = await getTemporaryDirectory();
+        final file = File('${dir.path}/ticket_$ticketId.pdf');
+        await file.writeAsBytes(bytes);
+        await Share.shareXFiles(
+          [XFile(file.path)],
+          subject: 'Ticket CuentasClaras - $ticketId',
+          text: 'Ticket de venta por ${_moneyPdf(sale.total)}',
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al generar el ticket: $e'),
+            backgroundColor: AppColors.danger,
+          ),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -441,8 +582,7 @@ class _TicketDetail extends StatelessWidget {
           children: [
             Center(
               child: Container(
-                width: 40,
-                height: 4,
+                width: 40, height: 4,
                 margin: const EdgeInsets.only(bottom: 24),
                 decoration: BoxDecoration(
                   color: AppColors.border,
@@ -454,8 +594,7 @@ class _TicketDetail extends StatelessWidget {
               child: Column(
                 children: [
                   Container(
-                    width: 56,
-                    height: 56,
+                    width: 56, height: 56,
                     decoration: BoxDecoration(
                       color: AppColors.primaryContainer,
                       shape: BoxShape.circle,
@@ -470,7 +609,7 @@ class _TicketDetail extends StatelessWidget {
                       style: AppTextStyles.caption),
                   const SizedBox(height: 4),
                   Text(
-                    'Nº ${sale.id.substring(0, sale.id.length < 8 ? sale.id.length : 8).toUpperCase()}',
+                    'No ${sale.id.substring(0, sale.id.length < 8 ? sale.id.length : 8).toUpperCase()}',
                     style: AppTextStyles.caption
                         .copyWith(color: AppColors.textGhost),
                   ),
@@ -510,7 +649,7 @@ class _TicketDetail extends StatelessWidget {
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis),
                           Text(
-                              '${Formatters.money(item.unitPrice)} × ${item.quantity}',
+                              '${Formatters.money(item.unitPrice)} x ${item.quantity}',
                               style: AppTextStyles.caption),
                         ],
                       ),
@@ -537,7 +676,8 @@ class _TicketDetail extends StatelessWidget {
               children: [
                 Expanded(child: Text('TOTAL', style: AppTextStyles.h3)),
                 Text(Formatters.money(sale.total),
-                    style: AppTextStyles.kpiMedium(color: AppColors.primary)),
+                    style:
+                        AppTextStyles.kpiMedium(color: AppColors.primary)),
               ],
             ),
             const SizedBox(height: 12),
@@ -549,15 +689,15 @@ class _TicketDetail extends StatelessWidget {
                           .copyWith(color: AppColors.textSecondary)),
                 ),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 5),
                   decoration: BoxDecoration(
                       color: AppColors.amberContainer,
                       borderRadius: BorderRadius.circular(100)),
                   child: Text(
                     '${sale.paymentMethod.icon} ${sale.paymentMethod.label}',
-                    style:
-                        AppTextStyles.label.copyWith(color: AppColors.amber),
+                    style: AppTextStyles.label
+                        .copyWith(color: AppColors.amber),
                   ),
                 ),
               ],
@@ -567,8 +707,8 @@ class _TicketDetail extends StatelessWidget {
             const SizedBox(height: 16),
             Center(
               child: Text('¡Gracias por tu compra!',
-                  style:
-                      AppTextStyles.body.copyWith(color: AppColors.textMuted)),
+                  style: AppTextStyles.body
+                      .copyWith(color: AppColors.textMuted)),
             ),
             const SizedBox(height: 4),
             Center(
@@ -578,12 +718,24 @@ class _TicketDetail extends StatelessWidget {
                   textAlign: TextAlign.center),
             ),
             const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cerrar'),
-              ),
+            // ← Botones compartir y cerrar
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _shareTicket(context),
+                    icon: const Icon(Icons.share_rounded, size: 18),
+                    label: Text(kIsWeb ? 'Descargar PDF' : 'Compartir'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Cerrar'),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -598,7 +750,8 @@ class _TicketDetail extends StatelessWidget {
         (i) => Expanded(
           child: Container(
               height: 1,
-              color: i % 2 == 0 ? AppColors.border : Colors.transparent),
+              color:
+                  i % 2 == 0 ? AppColors.border : Colors.transparent),
         ),
       ),
     );
