@@ -1,12 +1,21 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/utils/download_helper.dart';
 import '../../../data/models/product.dart';
 import '../../../data/models/sale.dart';
 import '../../../data/repositories/inventory_repository.dart';
+import '../../../data/services/supabase_service.dart';
 import '../../widgets/common_widgets.dart';
 
 class SalesScreen extends StatefulWidget {
@@ -19,6 +28,7 @@ class _SalesScreenState extends State<SalesScreen> {
   final _repo = InventoryRepository.instance;
   List<Sale> _sales = [];
   bool _loading = true;
+  bool get _isAdmin => SupabaseService.instance.isAdmin;
 
   @override
   void initState() {
@@ -54,6 +64,15 @@ class _SalesScreenState extends State<SalesScreen> {
             s.createdAt.year == today.year &&
             s.createdAt.month == today.month &&
             s.createdAt.day == today.day)
+        .fold(0, (a, b) => a + b.total);
+  }
+
+  double get _totalThisMonth {
+    final now = DateTime.now();
+    return _sales
+        .where((s) =>
+            s.createdAt.year == now.year &&
+            s.createdAt.month == now.month)
         .fold(0, (a, b) => a + b.total);
   }
 
@@ -138,19 +157,20 @@ class _SalesScreenState extends State<SalesScreen> {
               ],
             ),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text('TOTAL',
-                  style: AppTextStyles.labelSm
-                      .copyWith(color: AppColors.primaryContainer)),
-              const SizedBox(height: 4),
-              Text(
-                Formatters.money(_sales.fold(0, (a, b) => a + b.total)),
-                style: AppTextStyles.price(color: AppColors.onPrimary, size: 18),
-              ),
-            ],
-          ),
+          if (_isAdmin)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text('ESTE MES',
+                    style: AppTextStyles.labelSm
+                        .copyWith(color: AppColors.primaryContainer)),
+                const SizedBox(height: 4),
+                Text(
+                  Formatters.money(_totalThisMonth),
+                  style: AppTextStyles.price(color: AppColors.onPrimary, size: 18),
+                ),
+              ],
+            ),
         ],
       ),
     );
@@ -161,6 +181,157 @@ class _SalesScreenState extends State<SalesScreen> {
 class _TicketSheet extends StatelessWidget {
   const _TicketSheet({required this.sale});
   final Sale sale;
+
+  Future<void> _shareTicket(BuildContext context) async {
+    try {
+      // Cargar fuentes con soporte de € y caracteres especiales
+      final fontData = await rootBundle.load('assets/fonts/Roboto-Regular.ttf');
+      final ttf = pw.Font.ttf(fontData);
+      final fontBoldData = await rootBundle.load('assets/fonts/Roboto-Bold.ttf');
+      final ttfBold = pw.Font.ttf(fontBoldData);
+
+      final theme = pw.ThemeData.withFont(base: ttf, bold: ttfBold);
+
+      final pdf = pw.Document();
+      final ticketId = sale.id
+          .substring(0, sale.id.length < 8 ? sale.id.length : 8)
+          .toUpperCase();
+
+      pdf.addPage(
+        pw.Page(
+          theme: theme,
+          pageFormat: PdfPageFormat.a5,
+          margin: const pw.EdgeInsets.all(32),
+          build: (pw.Context ctx) {
+            return pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.center,
+              children: [
+                pw.Text('CuentasClaras',
+                    style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold)),
+                pw.SizedBox(height: 6),
+                pw.Text(Formatters.dateTime(sale.createdAt),
+                    style: const pw.TextStyle(fontSize: 11)),
+                pw.Text('No $ticketId',
+                    style: pw.TextStyle(fontSize: 10, color: PdfColors.grey600)),
+                pw.SizedBox(height: 16),
+                pw.Divider(),
+                pw.SizedBox(height: 12),
+                pw.Row(children: [
+                  pw.Expanded(child: pw.Text('PRODUCTO',
+                      style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold))),
+                  pw.Text('CANT.',
+                      style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                  pw.SizedBox(width: 16),
+                  pw.SizedBox(
+                    width: 60,
+                    child: pw.Text('IMPORTE',
+                        style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
+                        textAlign: pw.TextAlign.right),
+                  ),
+                ]),
+                pw.SizedBox(height: 8),
+                ...sale.items.map((item) => pw.Padding(
+                  padding: const pw.EdgeInsets.only(bottom: 8),
+                  child: pw.Row(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Expanded(
+                        child: pw.Column(
+                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+                          children: [
+                            pw.Text(item.productName,
+                                style: pw.TextStyle(fontSize: 11,
+                                    fontWeight: pw.FontWeight.bold)),
+                            pw.Text(
+                                '${_moneyPdf(item.unitPrice)} x ${item.quantity}',
+                                style: const pw.TextStyle(
+                                    fontSize: 9, color: PdfColors.grey600)),
+                          ],
+                        ),
+                      ),
+                      pw.SizedBox(width: 8),
+                      pw.Text('${item.quantity}',
+                          style: const pw.TextStyle(
+                              fontSize: 11, color: PdfColors.grey600)),
+                      pw.SizedBox(width: 16),
+                      pw.SizedBox(
+                        width: 60,
+                        child: pw.Text(_moneyPdf(item.subtotal),
+                            style: pw.TextStyle(fontSize: 11,
+                                fontWeight: pw.FontWeight.bold),
+                            textAlign: pw.TextAlign.right),
+                      ),
+                    ],
+                  ),
+                )),
+                pw.SizedBox(height: 8),
+                pw.Divider(),
+                pw.SizedBox(height: 12),
+                pw.Row(children: [
+                  pw.Expanded(child: pw.Text('TOTAL',
+                      style: pw.TextStyle(fontSize: 16,
+                          fontWeight: pw.FontWeight.bold))),
+                  pw.Text(_moneyPdf(sale.total),
+                      style: pw.TextStyle(fontSize: 18,
+                          fontWeight: pw.FontWeight.bold)),
+                ]),
+                pw.SizedBox(height: 8),
+                pw.Row(children: [
+                  pw.Expanded(child: pw.Text('Metodo de pago',
+                      style: const pw.TextStyle(
+                          fontSize: 10, color: PdfColors.grey600))),
+                  pw.Text(sale.paymentMethod.label,
+                      style: pw.TextStyle(fontSize: 10,
+                          fontWeight: pw.FontWeight.bold)),
+                ]),
+                pw.SizedBox(height: 24),
+                pw.Divider(),
+                pw.SizedBox(height: 12),
+                pw.Text('Gracias por tu compra!',
+                    style: const pw.TextStyle(
+                        fontSize: 11, color: PdfColors.grey600)),
+                pw.SizedBox(height: 4),
+                pw.Text('CuentasClaras - Tu negocio, sin cuentas pendientes.',
+                    style: const pw.TextStyle(
+                        fontSize: 9, color: PdfColors.grey500),
+                    textAlign: pw.TextAlign.center),
+              ],
+            );
+          },
+        ),
+      );
+
+      final bytes = await pdf.save();
+
+      if (kIsWeb) {
+        downloadPdfWeb(bytes, 'ticket_$ticketId.pdf');
+      } else {
+        final dir = await getTemporaryDirectory();
+        final file = File('${dir.path}/ticket_$ticketId.pdf');
+        await file.writeAsBytes(bytes);
+        await Share.shareXFiles(
+          [XFile(file.path)],
+          subject: 'Ticket CuentasClaras - $ticketId',
+          text: 'Ticket de venta por ${_moneyPdf(sale.total)}',
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al generar el ticket: $e'),
+            backgroundColor: AppColors.danger,
+          ),
+        );
+      }
+    }
+  }
+
+  // Formateador de dinero sin € para el PDF (usa EUR para evitar problemas de charset)
+  String _moneyPdf(double amount) {
+    final formatted = amount.toStringAsFixed(2).replaceAll('.', ',');
+    return '$formatted EUR';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -194,23 +365,19 @@ class _TicketSheet extends StatelessWidget {
                       color: AppColors.primaryContainer,
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(
-                      Icons.receipt_long_rounded,
-                      color: AppColors.primary,
-                      size: 28,
-                    ),
+                    child: const Icon(Icons.receipt_long_rounded,
+                        color: AppColors.primary, size: 28),
                   ),
                   const SizedBox(height: 12),
                   Text('CuentasClaras', style: AppTextStyles.h3),
                   const SizedBox(height: 4),
-                  Text(
-                    Formatters.dateTime(sale.createdAt),
-                    style: AppTextStyles.caption,
-                  ),
+                  Text(Formatters.dateTime(sale.createdAt),
+                      style: AppTextStyles.caption),
                   const SizedBox(height: 4),
                   Text(
-                    'Nº ${sale.id.substring(0, sale.id.length < 8 ? sale.id.length : 8).toUpperCase()}',
-                    style: AppTextStyles.caption.copyWith(color: AppColors.textGhost),
+                    'No ${sale.id.substring(0, sale.id.length < 8 ? sale.id.length : 8).toUpperCase()}',
+                    style: AppTextStyles.caption
+                        .copyWith(color: AppColors.textGhost),
                   ),
                 ],
               ),
@@ -225,7 +392,8 @@ class _TicketSheet extends StatelessWidget {
                 const SizedBox(width: 16),
                 SizedBox(
                   width: 72,
-                  child: Text('IMPORTE', style: AppTextStyles.labelSm, textAlign: TextAlign.right),
+                  child: Text('IMPORTE', style: AppTextStyles.labelSm,
+                      textAlign: TextAlign.right),
                 ),
               ],
             ),
@@ -240,17 +408,24 @@ class _TicketSheet extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(item.productName, style: AppTextStyles.label, maxLines: 2, overflow: TextOverflow.ellipsis),
-                          Text('${Formatters.money(item.unitPrice)} × ${item.quantity}', style: AppTextStyles.caption),
+                          Text(item.productName, style: AppTextStyles.label,
+                              maxLines: 2, overflow: TextOverflow.ellipsis),
+                          Text(
+                              '${Formatters.money(item.unitPrice)} x ${item.quantity}',
+                              style: AppTextStyles.caption),
                         ],
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Text('${item.quantity}', style: AppTextStyles.label.copyWith(color: AppColors.textMuted)),
+                    Text('${item.quantity}',
+                        style: AppTextStyles.label
+                            .copyWith(color: AppColors.textMuted)),
                     const SizedBox(width: 16),
                     SizedBox(
                       width: 72,
-                      child: Text(Formatters.money(item.subtotal), style: AppTextStyles.price(size: 14), textAlign: TextAlign.right),
+                      child: Text(Formatters.money(item.subtotal),
+                          style: AppTextStyles.price(size: 14),
+                          textAlign: TextAlign.right),
                     ),
                   ],
                 ),
@@ -262,46 +437,71 @@ class _TicketSheet extends StatelessWidget {
             Row(
               children: [
                 Expanded(child: Text('TOTAL', style: AppTextStyles.h3)),
-                Text(Formatters.money(sale.total), style: AppTextStyles.kpiMedium(color: AppColors.primary)),
+                Text(Formatters.money(sale.total),
+                    style: AppTextStyles.kpiMedium(color: AppColors.primary)),
               ],
             ),
             const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(
-                  child: Text('Método de pago', style: AppTextStyles.body.copyWith(color: AppColors.textSecondary)),
+                  child: Text('Método de pago',
+                      style: AppTextStyles.body
+                          .copyWith(color: AppColors.textSecondary)),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                  decoration: BoxDecoration(color: AppColors.amberContainer, borderRadius: BorderRadius.circular(100)),
-                  child: Text('${sale.paymentMethod.icon} ${sale.paymentMethod.label}',
-                      style: AppTextStyles.label.copyWith(color: AppColors.amber)),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                  decoration: BoxDecoration(
+                      color: AppColors.amberContainer,
+                      borderRadius: BorderRadius.circular(100)),
+                  child: Text(
+                      '${sale.paymentMethod.icon} ${sale.paymentMethod.label}',
+                      style:
+                          AppTextStyles.label.copyWith(color: AppColors.amber)),
                 ),
               ],
             ),
             const SizedBox(height: 8),
             Row(
               children: [
-                Expanded(child: Text('Productos', style: AppTextStyles.body.copyWith(color: AppColors.textSecondary))),
+                Expanded(child: Text('Productos',
+                    style: AppTextStyles.body
+                        .copyWith(color: AppColors.textSecondary))),
                 Text('${sale.itemCount} ud.', style: AppTextStyles.label),
               ],
             ),
             const SizedBox(height: 28),
             _ticketDivider(),
             const SizedBox(height: 16),
-            Center(child: Text('¡Gracias por tu compra!', style: AppTextStyles.body.copyWith(color: AppColors.textMuted))),
+            Center(
+                child: Text('¡Gracias por tu compra!',
+                    style:
+                        AppTextStyles.body.copyWith(color: AppColors.textMuted))),
             const SizedBox(height: 4),
             Center(
-              child: Text('CuentasClaras — Tu negocio, sin cuentas pendientes.',
+              child: Text(
+                  'CuentasClaras — Tu negocio, sin cuentas pendientes.',
                   style: AppTextStyles.caption, textAlign: TextAlign.center),
             ),
             const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cerrar'),
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _shareTicket(context),
+                    icon: const Icon(Icons.share_rounded, size: 18),
+                    label: Text(kIsWeb ? 'Descargar PDF' : 'Compartir'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Cerrar'),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -314,7 +514,9 @@ class _TicketSheet extends StatelessWidget {
       children: List.generate(
         40,
         (i) => Expanded(
-          child: Container(height: 1, color: i % 2 == 0 ? AppColors.border : Colors.transparent),
+          child: Container(
+              height: 1,
+              color: i % 2 == 0 ? AppColors.border : Colors.transparent),
         ),
       ),
     );
@@ -336,7 +538,7 @@ class _NewSaleSheetState extends State<_NewSaleSheet> {
   PaymentMethod _method = PaymentMethod.cash;
   bool _loading = true;
   bool _saving = false;
-  bool _scanning = false; 
+  bool _scanning = false;
   final _search = TextEditingController();
   List<Product> _filtered = [];
 
@@ -380,12 +582,10 @@ class _NewSaleSheetState extends State<_NewSaleSheet> {
 
   int get _cartCount => _cart.values.fold(0, (a, b) => a + b);
 
-  // ─── ESCÁNER ───────────────────────────────────────────────────
-
   void _openScanner() => setState(() => _scanning = true);
 
   void _handleBarcode(String barcode) async {
-    if (!_scanning) return; 
+    if (!_scanning) return;
     setState(() => _scanning = false);
 
     final product = await widget.repo.getProductByBarcode(barcode);
@@ -393,10 +593,8 @@ class _NewSaleSheetState extends State<_NewSaleSheet> {
 
     if (product == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Producto no encontrado: $barcode'),
-          backgroundColor: AppColors.danger,
-        ),
+        SnackBar(content: Text('Producto no encontrado: $barcode'),
+            backgroundColor: AppColors.danger),
       );
       return;
     }
@@ -406,17 +604,14 @@ class _NewSaleSheetState extends State<_NewSaleSheet> {
       setState(() => _cart[product.id] = qty + 1);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('✓ ${product.name} añadido al carrito'),
-          backgroundColor: AppColors.success,
-          duration: const Duration(seconds: 1),
-        ),
+            content: Text('✓ ${product.name} añadido al carrito'),
+            backgroundColor: AppColors.success,
+            duration: const Duration(seconds: 1)),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${product.name} sin stock disponible'),
-          backgroundColor: AppColors.warning,
-        ),
+        SnackBar(content: Text('${product.name} sin stock disponible'),
+            backgroundColor: AppColors.warning),
       );
     }
   }
@@ -424,18 +619,14 @@ class _NewSaleSheetState extends State<_NewSaleSheet> {
   Widget _buildScanner() {
     return Stack(
       children: [
-        // Cámara
         MobileScanner(
           onDetect: (capture) {
             final barcode = capture.barcodes.firstOrNull?.rawValue;
             if (barcode != null) _handleBarcode(barcode);
           },
         ),
-        // Guía visual
         Positioned(
-          top: 20,
-          left: 0,
-          right: 0,
+          top: 20, left: 0, right: 0,
           child: Center(
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -443,29 +634,22 @@ class _NewSaleSheetState extends State<_NewSaleSheet> {
                 color: Colors.black.withOpacity(0.6),
                 borderRadius: BorderRadius.circular(100),
               ),
-              child: Text(
-                'Apunta al código de barras',
-                style: AppTextStyles.label.copyWith(color: Colors.white),
-              ),
+              child: Text('Apunta al código de barras',
+                  style: AppTextStyles.label.copyWith(color: Colors.white)),
             ),
           ),
         ),
-        // Marco de escaneo
         Center(
           child: Container(
-            width: 240,
-            height: 240,
+            width: 240, height: 240,
             decoration: BoxDecoration(
               border: Border.all(color: AppColors.primary, width: 3),
               borderRadius: BorderRadius.circular(16),
             ),
           ),
         ),
-        // Botón cancelar
         Positioned(
-          bottom: 24,
-          left: 0,
-          right: 0,
+          bottom: 24, left: 0, right: 0,
           child: Center(
             child: ElevatedButton.icon(
               onPressed: () => setState(() => _scanning = false),
@@ -481,8 +665,6 @@ class _NewSaleSheetState extends State<_NewSaleSheet> {
       ],
     );
   }
-
-  // ─── CONFIRMAR VENTA ───────────────────────────────────────────
 
   Future<void> _confirm() async {
     if (_cart.isEmpty) return;
@@ -522,7 +704,8 @@ class _NewSaleSheetState extends State<_NewSaleSheet> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding:
+          EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: DraggableScrollableSheet(
         initialChildSize: 0.9,
         maxChildSize: 0.97,
@@ -532,13 +715,12 @@ class _NewSaleSheetState extends State<_NewSaleSheet> {
           color: AppColors.surface,
           child: Column(
             children: [
-              // ─── Cabecera ────────────────────────────────────────
               Padding(
                 padding: const EdgeInsets.fromLTRB(24, 16, 16, 0),
                 child: Row(
                   children: [
-                    Expanded(child: Text('Nueva venta', style: AppTextStyles.h3)),
-                    // Botón escáner
+                    Expanded(
+                        child: Text('Nueva venta', style: AppTextStyles.h3)),
                     IconButton(
                       icon: const Icon(Icons.qr_code_scanner_rounded),
                       tooltip: 'Escanear código de barras',
@@ -552,8 +734,6 @@ class _NewSaleSheetState extends State<_NewSaleSheet> {
                 ),
               ),
               const Divider(height: 16),
-
-              // ─── Buscador (solo si no está escaneando) ───────────
               if (!_scanning)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -566,31 +746,40 @@ class _NewSaleSheetState extends State<_NewSaleSheet> {
                   ),
                 ),
               if (!_scanning) const SizedBox(height: 8),
-
-              // ─── Contenido principal ──────────────────────────────
               Expanded(
                 child: _scanning
                     ? _buildScanner()
                     : _loading
-                        ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+                        ? const Center(
+                            child: CircularProgressIndicator(
+                                color: AppColors.primary))
                         : ListView.separated(
                             controller: scroll,
-                            padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+                            padding:
+                                const EdgeInsets.fromLTRB(20, 4, 20, 12),
                             itemCount: _filtered.length,
-                            separatorBuilder: (_, __) => const SizedBox(height: 8),
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 8),
                             itemBuilder: (_, i) {
                               final p = _filtered[i];
                               final qty = _cart[p.id] ?? 0;
                               return AppCard(
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 12),
                                 child: Row(
                                   children: [
                                     Expanded(
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
-                                          Text(p.name, style: AppTextStyles.label, maxLines: 1, overflow: TextOverflow.ellipsis),
-                                          Text('${Formatters.money(p.priceSale)} · ${p.stock} en stock', style: AppTextStyles.caption),
+                                          Text(p.name,
+                                              style: AppTextStyles.label,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis),
+                                          Text(
+                                              '${Formatters.money(p.priceSale)} · ${p.stock} en stock',
+                                              style: AppTextStyles.caption),
                                         ],
                                       ),
                                     ),
@@ -600,18 +789,26 @@ class _NewSaleSheetState extends State<_NewSaleSheet> {
                                         if (qty > 0) ...[
                                           _qtyBtn(Icons.remove_rounded, () {
                                             setState(() {
-                                              if (qty > 1) { _cart[p.id] = qty - 1; }
-                                              else { _cart.remove(p.id); }
+                                              if (qty > 1) {
+                                                _cart[p.id] = qty - 1;
+                                              } else {
+                                                _cart.remove(p.id);
+                                              }
                                             });
                                           }),
                                           Padding(
-                                            padding: const EdgeInsets.symmetric(horizontal: 10),
-                                            child: Text('$qty', style: AppTextStyles.label),
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 10),
+                                            child: Text('$qty',
+                                                style: AppTextStyles.label),
                                           ),
                                         ],
                                         _qtyBtn(
                                           Icons.add_rounded,
-                                          p.stock > qty ? () => setState(() => _cart[p.id] = qty + 1) : null,
+                                          p.stock > qty
+                                              ? () => setState(
+                                                  () => _cart[p.id] = qty + 1)
+                                              : null,
                                           filled: true,
                                         ),
                                       ],
@@ -622,8 +819,6 @@ class _NewSaleSheetState extends State<_NewSaleSheet> {
                             },
                           ),
               ),
-
-              // ─── Footer carrito ───────────────────────────────────
               if (_cartCount > 0 && !_scanning) ...[
                 const Divider(height: 1),
                 Container(
@@ -640,12 +835,16 @@ class _NewSaleSheetState extends State<_NewSaleSheet> {
                               child: GestureDetector(
                                 onTap: () => setState(() => _method = m),
                                 child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 6),
                                   decoration: BoxDecoration(
-                                    color: _method == m ? AppColors.primary : AppColors.surfaceVariant,
+                                    color: _method == m
+                                        ? AppColors.primary
+                                        : AppColors.surfaceVariant,
                                     borderRadius: BorderRadius.circular(100),
                                   ),
-                                  child: Text(m.icon, style: const TextStyle(fontSize: 18)),
+                                  child: Text(m.icon,
+                                      style: const TextStyle(fontSize: 18)),
                                 ),
                               ),
                             ),
@@ -659,9 +858,13 @@ class _NewSaleSheetState extends State<_NewSaleSheet> {
                           onPressed: _saving ? null : _confirm,
                           child: _saving
                               ? const SizedBox(
-                                  width: 22, height: 22,
-                                  child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.onPrimary))
-                              : Text('Confirmar venta · ${Formatters.money(_cartTotal)}'),
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2.5,
+                                      color: AppColors.onPrimary))
+                              : Text(
+                                  'Confirmar venta · ${Formatters.money(_cartTotal)}'),
                         ),
                       ),
                     ],
@@ -685,7 +888,11 @@ class _NewSaleSheetState extends State<_NewSaleSheet> {
         child: SizedBox(
           width: 32,
           height: 32,
-          child: Icon(icon, size: 16, color: filled ? AppColors.onPrimary : AppColors.textSecondary),
+          child: Icon(icon,
+              size: 16,
+              color: filled
+                  ? AppColors.onPrimary
+                  : AppColors.textSecondary),
         ),
       ),
     );

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
@@ -25,12 +26,18 @@ class _ProductsScreenState extends State<ProductsScreen> {
   bool _loading = true;
   bool _onlyAlerts = false;
   bool get _isAdmin => SupabaseService.instance.isAdmin;
+  late StreamSubscription _sub; // ← añadido
 
   @override
   void initState() {
     super.initState();
     _load();
     _search.addListener(() => _load());
+    // ← suscripción al stream para actualizar en tiempo real
+    _sub = InventoryRepository.instance.onStockChanged.listen((_) async {
+      await Future.delayed(const Duration(milliseconds: 800));
+      if (mounted) _load();
+    });
   }
 
   Future<void> _load() async {
@@ -51,6 +58,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
   @override
   void dispose() {
+    _sub.cancel(); // ← añadido
     _search.dispose();
     super.dispose();
   }
@@ -121,7 +129,6 @@ class _ProductsScreenState extends State<ProductsScreen> {
             },
             tooltip: 'Solo alertas',
           ),
-          // Perfil solo para empleados
           if (!_isAdmin)
             GestureDetector(
               onTap: _showProfile,
@@ -137,9 +144,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                 child: Center(
                   child: Text(
                     initial,
-                    style: AppTextStyles.label.copyWith(
-                      color: AppColors.primary,
-                    ),
+                    style: AppTextStyles.label.copyWith(color: AppColors.primary),
                   ),
                 ),
               ),
@@ -161,8 +166,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
           Expanded(
             child: _loading
                 ? const Center(
-                    child:
-                        CircularProgressIndicator(color: AppColors.primary))
+                    child: CircularProgressIndicator(color: AppColors.primary))
                 : _products.isEmpty
                     ? EmptyState(
                         icon: Icons.inventory_2_outlined,
@@ -183,11 +187,9 @@ class _ProductsScreenState extends State<ProductsScreen> {
                         onRefresh: _load,
                         color: AppColors.primary,
                         child: ListView.separated(
-                          padding:
-                              const EdgeInsets.fromLTRB(20, 12, 20, 100),
+                          padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
                           itemCount: _products.length,
-                          separatorBuilder: (_, __) =>
-                              const SizedBox(height: 8),
+                          separatorBuilder: (_, __) => const SizedBox(height: 8),
                           itemBuilder: (ctx, i) => ProductListTile(
                             product: _products[i],
                             onTap: () => _showProductDetail(_products[i]),
@@ -272,7 +274,6 @@ class _EmployeeProfileSheet extends StatelessWidget {
           controller: scroll,
           padding: const EdgeInsets.fromLTRB(24, 8, 24, 40),
           children: [
-            // Handle
             Center(
               child: Container(
                 width: 40, height: 4,
@@ -283,7 +284,6 @@ class _EmployeeProfileSheet extends StatelessWidget {
                 ),
               ),
             ),
-            // Avatar
             Center(
               child: Column(
                 children: [
@@ -303,8 +303,7 @@ class _EmployeeProfileSheet extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  if (name.isNotEmpty)
-                    Text(name, style: AppTextStyles.h3),
+                  if (name.isNotEmpty) Text(name, style: AppTextStyles.h3),
                   const SizedBox(height: 4),
                   Text(email, style: AppTextStyles.caption),
                   const SizedBox(height: 4),
@@ -326,21 +325,17 @@ class _EmployeeProfileSheet extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 28),
-            // Info
             AppCard(
               padding: const EdgeInsets.all(16),
               child: Row(
                 children: [
-                  const Icon(Icons.shield_outlined,
-                      size: 18, color: AppColors.textMuted),
+                  const Icon(Icons.shield_outlined, size: 18, color: AppColors.textMuted),
                   const SizedBox(width: 12),
-                  Text('Datos protegidos con RLS · Supabase',
-                      style: AppTextStyles.caption),
+                  Text('Datos protegidos con RLS · Supabase', style: AppTextStyles.caption),
                 ],
               ),
             ),
             const SizedBox(height: 16),
-            // Cerrar sesión
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
@@ -349,8 +344,7 @@ class _EmployeeProfileSheet extends StatelessWidget {
                     context: context,
                     builder: (ctx) => AlertDialog(
                       title: const Text('Cerrar sesión'),
-                      content: const Text(
-                          '¿Estás seguro de que quieres cerrar sesión?'),
+                      content: const Text('¿Estás seguro de que quieres cerrar sesión?'),
                       actions: [
                         TextButton(
                           onPressed: () => Navigator.pop(ctx, false),
@@ -358,8 +352,7 @@ class _EmployeeProfileSheet extends StatelessWidget {
                         ),
                         TextButton(
                           onPressed: () => Navigator.pop(ctx, true),
-                          style: TextButton.styleFrom(
-                              foregroundColor: AppColors.danger),
+                          style: TextButton.styleFrom(foregroundColor: AppColors.danger),
                           child: const Text('Cerrar sesión'),
                         ),
                       ],
@@ -407,8 +400,7 @@ class ProductDetail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cat =
-        categories.where((c) => c.id == product.categoryId).firstOrNull;
+    final cat = categories.where((c) => c.id == product.categoryId).firstOrNull;
 
     return DraggableScrollableSheet(
       initialChildSize: 0.75,
@@ -439,8 +431,7 @@ class ProductDetail extends StatelessWidget {
                     children: [
                       if (cat != null)
                         Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 4),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                           margin: const EdgeInsets.only(bottom: 8),
                           decoration: BoxDecoration(
                             color: cat.color.withOpacity(0.12),
@@ -465,7 +456,6 @@ class ProductDetail extends StatelessWidget {
             ),
             const SizedBox(height: 24),
 
-            // Precios
             if (isAdmin)
               Row(
                 children: [
@@ -481,7 +471,6 @@ class ProductDetail extends StatelessWidget {
 
             const SizedBox(height: 12),
 
-            // Stock
             AppCard(
               backgroundColor: product.hasAlert
                   ? (product.isOutOfStock ? AppColors.danger.withOpacity(0.05) : AppColors.warning.withOpacity(0.05))
@@ -716,7 +705,8 @@ class _ProductFormState extends State<_ProductForm> {
 
   Future<void> _save() async {
     if (_name.text.trim().isEmpty || _sku.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Nombre y SKU son obligatorios')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Nombre y SKU son obligatorios')));
       return;
     }
     setState(() => _saving = true);
@@ -820,7 +810,8 @@ class _ProductFormState extends State<_ProductForm> {
                       child: ElevatedButton(
                         onPressed: _saving ? null : _save,
                         child: _saving
-                            ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.onPrimary))
+                            ? const SizedBox(width: 22, height: 22,
+                                child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.onPrimary))
                             : Text(isEdit ? 'Guardar cambios' : 'Crear producto'),
                       ),
                     ),
@@ -838,7 +829,9 @@ class _ProductFormState extends State<_ProductForm> {
       {String? hint, bool numeric = false, bool isInt = false, int maxLines = 1}) {
     return TextField(
       controller: ctrl, maxLines: maxLines,
-      keyboardType: numeric ? (isInt ? TextInputType.number : const TextInputType.numberWithOptions(decimal: true)) : TextInputType.text,
+      keyboardType: numeric
+          ? (isInt ? TextInputType.number : const TextInputType.numberWithOptions(decimal: true))
+          : TextInputType.text,
       decoration: InputDecoration(labelText: label, hintText: hint),
     );
   }

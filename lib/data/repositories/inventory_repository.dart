@@ -23,6 +23,7 @@ class InventoryRepository {
     final data = await SupabaseService.instance.client
         .from(AppConstants.tableCategories)
         .select()
+        .eq('user_id', SupabaseService.instance.ownerId)
         .order('name');
     return (data as List).map((e) => Category.fromJson(e)).toList();
   }
@@ -49,6 +50,7 @@ class InventoryRepository {
     final data = await SupabaseService.instance.client
         .from(AppConstants.tableSuppliers)
         .select()
+        .eq('user_id', SupabaseService.instance.ownerId)
         .order('name');
     return (data as List).map((e) => Supplier.fromJson(e)).toList();
   }
@@ -62,7 +64,8 @@ class InventoryRepository {
   }) async {
     var query = SupabaseService.instance.client
         .from(AppConstants.tableProducts)
-        .select();
+        .select()
+        .eq('user_id', SupabaseService.instance.ownerId);
     if (categoryId != null) query = query.eq('category_id', categoryId);
     if (search != null && search.isNotEmpty) {
       query = query.or('name.ilike.%$search%,sku.ilike.%$search%');
@@ -75,21 +78,29 @@ class InventoryRepository {
     return products;
   }
 
+  // Query directa a Supabase sin filtros adicionales para garantizar datos frescos
   Future<List<Product>> getLowStockProducts() async {
-    return getProducts(lowStockOnly: true);
+    final data = await SupabaseService.instance.client
+        .from(AppConstants.tableProducts)
+        .select()
+        .eq('user_id', SupabaseService.instance.ownerId)
+        .order('name');
+    final products = (data as List).map((e) => Product.fromJson(e)).toList();
+    return products.where((p) => p.hasAlert).toList();
   }
 
   Future<Product?> getProductByBarcode(String barcode) async {
     final data = await SupabaseService.instance.client
         .from(AppConstants.tableProducts)
         .select()
+        .eq('user_id', SupabaseService.instance.ownerId)
         .eq('barcode', barcode)
         .maybeSingle();
     return data != null ? Product.fromJson(data) : null;
   }
 
   Future<Product> createProduct(Product p) async {
-    final userId = SupabaseService.instance.currentUserId ?? '';
+    final userId = SupabaseService.instance.ownerId;
     final result = await SupabaseService.instance.client
         .from(AppConstants.tableProducts)
         .insert({
@@ -123,6 +134,7 @@ class InventoryRepository {
 
   Future<void> adjustStock(String productId, int delta) async {
     try {
+      // 1. Leer stock actual
       final data = await SupabaseService.instance.client
           .from(AppConstants.tableProducts)
           .select()
@@ -131,6 +143,7 @@ class InventoryRepository {
       final p = Product.fromJson(data);
       final newStock = (p.stock + delta).clamp(0, 999999);
 
+      // 2. Actualizar stock
       await SupabaseService.instance.client
           .from(AppConstants.tableProducts)
           .update({
@@ -139,31 +152,41 @@ class InventoryRepository {
           })
           .eq('id', productId);
 
-      final updated = p.copyWith(stock: newStock);
-      if (updated.hasAlert) {
-        final userId = SupabaseService.instance.currentUserId ?? '';
+      // 3. Verificar que el UPDATE se aplicó leyendo de nuevo
+      final verify = await SupabaseService.instance.client
+          .from(AppConstants.tableProducts)
+          .select()
+          .eq('id', productId)
+          .single();
+      final verifiedProduct = Product.fromJson(verify);
+
+      // 4. Generar notificación si el stock verificado tiene alerta
+      if (verifiedProduct.hasAlert) {
+        final userId = SupabaseService.instance.ownerId;
         await SupabaseService.instance.client
             .from(AppConstants.tableNotifications)
             .insert({
               'user_id': userId,
               'product_id': productId,
-              'product_name': p.name,
-              'message': updated.isOutOfStock
-                  ? '${p.name} está AGOTADO. Realiza un pedido urgente.'
-                  : '${p.name} tiene solo $newStock ${p.unit}(s) disponibles. Mínimo: ${p.stockMin}.',
-              'current_stock': newStock,
+              'product_name': verifiedProduct.name,
+              'message': verifiedProduct.isOutOfStock
+                  ? '${verifiedProduct.name} está AGOTADO. Realiza un pedido urgente.'
+                  : '${verifiedProduct.name} tiene solo ${verifiedProduct.stock} ${verifiedProduct.unit}(s) disponibles. Mínimo: ${verifiedProduct.stockMin}.',
+              'current_stock': verifiedProduct.stock,
               'is_read': false,
             });
 
-        // Notificación local en la barra del móvil
         await NotificationService.instance.showStockAlert(
-          productName: p.name,
-          currentStock: newStock,
-          isOutOfStock: newStock == 0,
+          productName: verifiedProduct.name,
+          currentStock: verifiedProduct.stock,
+          isOutOfStock: verifiedProduct.stock == 0,
         );
       }
 
+      // 5. Esperar antes de notificar para que Supabase propague el cambio
+      await Future.delayed(const Duration(milliseconds: 300));
       _stockChangeController.add(null);
+
     } catch (e) {
       print('❌ ERROR adjustStock ($productId): $e');
       rethrow;
@@ -179,18 +202,13 @@ class InventoryRepository {
   }) async {
     try {
       final total = items.fold<double>(0, (s, i) => s + i.subtotal);
-      final userId = SupabaseService.instance.currentUserId ?? '';
+      final userId = SupabaseService.instance.ownerId;
       final saleId = _uuid.v4();
 
-      print('📦 Creando venta para usuario: $userId');
-      print('📦 Items: ${items.length}');
-
       for (final item in items) {
-        print('📦 Ajustando stock de ${item.productId} en ${-item.quantity}');
         await adjustStock(item.productId, -item.quantity);
       }
 
-      print('💾 Insertando venta en Supabase...');
       final result = await SupabaseService.instance.client
           .from(AppConstants.tableSales)
           .insert({
@@ -204,7 +222,6 @@ class InventoryRepository {
           .select()
           .single();
 
-      print('✅ Venta creada correctamente: $saleId');
       _stockChangeController.add(null);
       return Sale.fromJson(result);
     } catch (e) {
@@ -216,7 +233,8 @@ class InventoryRepository {
   Future<List<Sale>> getSales({DateTime? since, int? limit}) async {
     var query = SupabaseService.instance.client
         .from(AppConstants.tableSales)
-        .select();
+        .select()
+        .eq('user_id', SupabaseService.instance.ownerId);
     if (since != null) {
       query = query.gte('created_at', since.toIso8601String());
     }
@@ -229,9 +247,12 @@ class InventoryRepository {
   // ─── NOTIFICACIONES ──────────────────────────────────────────
 
   Future<List<AppNotification>> getNotifications() async {
+    final cutoff = DateTime.now().subtract(const Duration(days: 15));
     final data = await SupabaseService.instance.client
         .from(AppConstants.tableNotifications)
         .select()
+        .eq('user_id', SupabaseService.instance.ownerId)
+        .gte('created_at', cutoff.toIso8601String()) // solo últimos 15 días
         .order('created_at', ascending: false)
         .limit(50);
     return (data as List).map((e) => AppNotification.fromJson(e)).toList();

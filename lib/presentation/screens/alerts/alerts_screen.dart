@@ -7,7 +7,7 @@ import 'package:cuentas_claras/core/utils/formatters.dart';
 import 'package:cuentas_claras/data/models/product.dart';
 import 'package:cuentas_claras/data/models/sale.dart';
 import 'package:cuentas_claras/data/repositories/inventory_repository.dart';
-import 'package:cuentas_claras/data/services/supabase_service.dart'; 
+import 'package:cuentas_claras/data/services/supabase_service.dart';
 import 'package:cuentas_claras/presentation/widgets/common_widgets.dart';
 import 'package:cuentas_claras/presentation/screens/products/products_screen.dart';
 
@@ -33,7 +33,8 @@ class _AlertsScreenState extends State<AlertsScreen>
     _tabs = TabController(length: 2, vsync: this);
     WidgetsBinding.instance.addObserver(this);
     _load();
-    _sub = InventoryRepository.instance.onStockChanged.listen((_) {
+    _sub = InventoryRepository.instance.onStockChanged.listen((_) async {
+      await Future.delayed(const Duration(milliseconds: 800));
       if (mounted) _load();
     });
   }
@@ -75,7 +76,7 @@ class _AlertsScreenState extends State<AlertsScreen>
         repo: _repo,
         categories: categories,
         onUpdate: _load,
-        isAdmin: SupabaseService.instance.isAdmin, 
+        isAdmin: SupabaseService.instance.isAdmin,
       ),
     );
     _load();

@@ -16,19 +16,23 @@ class Formatters {
 
   static String money(num value) => _currency.format(value);
   static String integer(num value) => _integer.format(value);
-  static String dateShort(DateTime d) => _dateShort.format(d);
-  static String dateLong(DateTime d) => _dateLong.format(d);
-  static String dateTime(DateTime d) => _dateTime.format(d);
-  static String time(DateTime d) => _time.format(d); 
+
+  // ← .toLocal() convierte UTC → hora local del dispositivo
+  static String dateShort(DateTime d) => _dateShort.format(d.toLocal());
+  static String dateLong(DateTime d) => _dateLong.format(d.toLocal());
+  static String dateTime(DateTime d) => _dateTime.format(d.toLocal());
+  static String time(DateTime d) => _time.format(d.toLocal());
 
   static String relative(DateTime date) {
-    final diff = DateTime.now().difference(date);
+    final now = DateTime.now();
+    final local = date.toLocal();
+    final diff = now.difference(local);
     if (diff.inSeconds < 60) return 'ahora mismo';
     if (diff.inMinutes < 60) return 'hace ${diff.inMinutes} min';
     if (diff.inHours < 24) return 'hace ${diff.inHours} h';
     if (diff.inDays == 1) return 'ayer';
     if (diff.inDays < 7) return 'hace ${diff.inDays} días';
-    return dateShort(date);
+    return dateShort(local);
   }
 
   static String stockStatus(int stock, int stockMin) {
