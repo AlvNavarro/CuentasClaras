@@ -112,15 +112,15 @@ class _LoginScreenState extends State<LoginScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 32),
-              Container(
-                width: 64, height: 64,
-                decoration: BoxDecoration(
-                  color: AppColors.primary,
-                  borderRadius: BorderRadius.circular(18),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(18),
+                child: Image.asset(
+                  'assets/images/logo.png',
+                width: 80,
+                height: 80,
+                fit: BoxFit.cover,
                 ),
-                child: const Icon(Icons.storefront_rounded,
-                    color: AppColors.onPrimary, size: 32),
-              ).animate().fadeIn(duration: 600.ms).slideY(begin: 0.3, end: 0),
+                ).animate().fadeIn(duration: 600.ms).slideY(begin: 0.3, end: 0),
               const SizedBox(height: 28),
 
               // Título según modo

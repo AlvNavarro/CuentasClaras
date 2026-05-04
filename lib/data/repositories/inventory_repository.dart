@@ -125,12 +125,38 @@ class InventoryRepository {
   }
 
   Future<void> deleteProduct(String id) async {
-    await SupabaseService.instance.client
+  // Leer el producto antes de borrarlo para saber su categoría
+  final data = await SupabaseService.instance.client
+      .from(AppConstants.tableProducts)
+      .select()
+      .eq('id', id)
+      .single();
+  final product = Product.fromJson(data);
+  final categoryId = product.categoryId;
+
+  // Borrar el producto
+  await SupabaseService.instance.client
+      .from(AppConstants.tableProducts)
+      .delete()
+      .eq('id', id);
+
+  // Si tenía categoría, comprobar si quedan más productos en ella
+  if (categoryId != null) {
+    final remaining = await SupabaseService.instance.client
         .from(AppConstants.tableProducts)
-        .delete()
-        .eq('id', id);
-    _stockChangeController.add(null);
+        .select()
+        .eq('user_id', SupabaseService.instance.ownerId)
+        .eq('category_id', categoryId);
+    if ((remaining as List).isEmpty) {
+      await SupabaseService.instance.client
+          .from(AppConstants.tableCategories)
+          .delete()
+          .eq('id', categoryId);
+    }
   }
+
+  _stockChangeController.add(null);
+}
 
   Future<void> adjustStock(String productId, int delta) async {
     try {
