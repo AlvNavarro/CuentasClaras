@@ -305,10 +305,14 @@ class ProductDetail extends StatelessWidget {
             const SizedBox(height: 12),
             AppCard(
               backgroundColor: product.hasAlert
-                  ? (product.isOutOfStock ? AppColors.danger.withOpacity(0.05) : AppColors.warning.withOpacity(0.05))
+                  ? (product.isOutOfStock
+                      ? AppColors.danger.withOpacity(0.05)
+                      : AppColors.warning.withOpacity(0.05))
                   : null,
               borderColor: product.hasAlert
-                  ? (product.isOutOfStock ? AppColors.danger.withOpacity(0.3) : AppColors.warning.withOpacity(0.3))
+                  ? (product.isOutOfStock
+                      ? AppColors.danger.withOpacity(0.3)
+                      : AppColors.warning.withOpacity(0.3))
                   : null,
               child: Row(
                 children: [
@@ -322,28 +326,36 @@ class ProductDetail extends StatelessWidget {
                         children: [
                           Text('${product.stock}',
                               style: AppTextStyles.kpiLarge(
-                                  color: product.hasAlert ? AppColors.danger : AppColors.primary)),
+                                  color: product.hasAlert
+                                      ? AppColors.danger
+                                      : AppColors.primary)),
                           Padding(
                             padding: const EdgeInsets.only(bottom: 4, left: 4),
                             child: Text(product.unit,
-                                style: AppTextStyles.body.copyWith(color: AppColors.textMuted)),
+                                style: AppTextStyles.body
+                                    .copyWith(color: AppColors.textMuted)),
                           ),
                         ],
                       ),
-                      Text('Mínimo: ${product.stockMin} ${product.unit}', style: AppTextStyles.caption),
+                      Text('Mínimo: ${product.stockMin} ${product.unit}',
+                          style: AppTextStyles.caption),
                     ],
                   ),
                   const Spacer(),
                   if (isAdmin)
                     Column(
                       children: [
-                        _stockBtn(context, Icons.add_rounded, AppColors.primary, () async {
+                        _stockBtn(context, Icons.add_rounded, AppColors.primary,
+                            () async {
                           await repo.adjustStock(product.id, 1);
                           onUpdate();
                           if (context.mounted) Navigator.pop(context);
                         }),
                         const SizedBox(height: 8),
-                        _stockBtn(context, Icons.remove_rounded, AppColors.accent,
+                        _stockBtn(
+                            context,
+                            Icons.remove_rounded,
+                            AppColors.accent,
                             product.stock > 0
                                 ? () async {
                                     await repo.adjustStock(product.id, -1);
@@ -362,7 +374,8 @@ class ProductDetail extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: Row(
                   children: [
-                    const Icon(Icons.qr_code_outlined, color: AppColors.textMuted, size: 20),
+                    const Icon(Icons.qr_code_outlined,
+                        color: AppColors.textMuted, size: 20),
                     const SizedBox(width: 12),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -439,7 +452,8 @@ class ProductDetail extends StatelessWidget {
     );
   }
 
-  Widget _stockBtn(BuildContext context, IconData icon, Color color, VoidCallback? onTap) {
+  Widget _stockBtn(BuildContext context, IconData icon, Color color,
+      VoidCallback? onTap) {
     return Material(
       color: color.withOpacity(0.12),
       borderRadius: BorderRadius.circular(12),
@@ -460,9 +474,12 @@ class ProductDetail extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Eliminar producto'),
-        content: Text('¿Estás seguro de que quieres eliminar "${product.name}"? Esta acción no se puede deshacer.'),
+        content: Text(
+            '¿Estás seguro de que quieres eliminar "${product.name}"? Esta acción no se puede deshacer.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar')),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: TextButton.styleFrom(foregroundColor: AppColors.danger),
@@ -534,18 +551,20 @@ class _ProductFormState extends State<_ProductForm> {
 
   @override
   void dispose() {
-    for (final c in [_name, _sku, _priceSale, _priceCost, _stock, _stockMin, _barcode, _desc]) {
+    for (final c in [
+      _name, _sku, _priceSale, _priceCost,
+      _stock, _stockMin, _barcode, _desc
+    ]) {
       c.dispose();
     }
     super.dispose();
   }
 
-  // ─── CREAR CATEGORÍA ────────────────────────────────────────
   Future<void> _createCategory() async {
     final nameCtrl = TextEditingController();
     final selectedColor = ValueNotifier<String>('#4A7A5C');
 
-    final colors = [
+    const colors = [
       '#4A7A5C', '#B85C38', '#C8903A', '#2A5F7A',
       '#7A2A5F', '#5C4A7A', '#7A5C2A', '#2A7A6F',
     ];
@@ -567,7 +586,8 @@ class _ProductFormState extends State<_ProductForm> {
               ),
             ),
             const SizedBox(height: 16),
-            const Text('Color:', style: TextStyle(fontWeight: FontWeight.w600)),
+            const Text('Color:',
+                style: TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
             ValueListenableBuilder<String>(
               valueListenable: selectedColor,
@@ -575,7 +595,8 @@ class _ProductFormState extends State<_ProductForm> {
                 spacing: 8,
                 runSpacing: 8,
                 children: colors.map((hex) {
-                  final color = Color(int.parse('FF${hex.replaceFirst('#', '')}', radix: 16));
+                  final color = Color(
+                      int.parse('FF${hex.replaceFirst('#', '')}', radix: 16));
                   final selected = current == hex;
                   return GestureDetector(
                     onTap: () => selectedColor.value = hex,
@@ -590,7 +611,8 @@ class _ProductFormState extends State<_ProductForm> {
                         ),
                       ),
                       child: selected
-                          ? const Icon(Icons.check, color: Colors.white, size: 16)
+                          ? const Icon(Icons.check,
+                              color: Colors.white, size: 16)
                           : null,
                     ),
                   );
@@ -608,16 +630,29 @@ class _ProductFormState extends State<_ProductForm> {
             onPressed: () async {
               if (nameCtrl.text.trim().isEmpty) return;
               try {
-                final cat = await widget.repo.upsertCategory(
-                  Category(
-                    id: '',
-                    name: nameCtrl.text.trim(),
-                    colorHex: selectedColor.value,
-                  ),
-                );
+                // ← Insert directo con user_id incluido
+                final userId = SupabaseService.instance.ownerId;
+                final result = await SupabaseService.instance.client
+                    .from('categories')
+                    .insert({
+                      'name': nameCtrl.text.trim(),
+                      'color_hex': selectedColor.value,
+                      'icon': 'package',
+                      'user_id': userId,
+                    })
+                    .select()
+                    .single();
+                final cat = Category.fromJson(result);
                 if (ctx.mounted) Navigator.pop(ctx, cat);
               } catch (e) {
-                if (ctx.mounted) Navigator.pop(ctx);
+                if (ctx.mounted) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    SnackBar(
+                      content: Text('Error al crear categoría: $e'),
+                      backgroundColor: AppColors.danger,
+                    ),
+                  );
+                }
               }
             },
             child: const Text('Crear'),
@@ -674,7 +709,8 @@ class _ProductFormState extends State<_ProductForm> {
   Widget build(BuildContext context) {
     final isEdit = widget.product != null;
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom),
       child: DraggableScrollableSheet(
         initialChildSize: 0.9,
         maxChildSize: 0.97,
@@ -708,51 +744,69 @@ class _ProductFormState extends State<_ProductForm> {
                         hint: 'Ej: Barra de pan artesana'),
                     const SizedBox(height: 16),
                     Row(children: [
-                      Expanded(child: _field('SKU / Referencia *', _sku, hint: 'PAN-001')),
+                      Expanded(
+                          child: _field('SKU / Referencia *', _sku,
+                              hint: 'PAN-001')),
                       const SizedBox(width: 12),
                       Expanded(
                         child: DropdownButtonFormField<String>(
                           value: _unit,
-                          decoration: const InputDecoration(labelText: 'Unidad'),
-                          items: ['ud', 'kg', 'g', 'L', 'ml', 'bot', 'pq', 'lata', 'bote', 'sobre']
-                              .map((u) => DropdownMenuItem(value: u, child: Text(u)))
+                          decoration:
+                              const InputDecoration(labelText: 'Unidad'),
+                          items: [
+                            'ud', 'kg', 'g', 'L', 'ml',
+                            'bot', 'pq', 'lata', 'bote', 'sobre'
+                          ]
+                              .map((u) => DropdownMenuItem(
+                                  value: u, child: Text(u)))
                               .toList(),
-                          onChanged: (v) => setState(() => _unit = v ?? 'ud'),
+                          onChanged: (v) =>
+                              setState(() => _unit = v ?? 'ud'),
                         ),
                       ),
                     ]),
                     const SizedBox(height: 16),
                     Row(children: [
-                      Expanded(child: _field('PVP (€) *', _priceSale, hint: '1.20', numeric: true)),
+                      Expanded(
+                          child: _field('PVP (€) *', _priceSale,
+                              hint: '1.20', numeric: true)),
                       const SizedBox(width: 12),
-                      Expanded(child: _field('Coste (€)', _priceCost, hint: '0.38', numeric: true)),
+                      Expanded(
+                          child: _field('Coste (€)', _priceCost,
+                              hint: '0.38', numeric: true)),
                     ]),
                     const SizedBox(height: 16),
                     Row(children: [
-                      Expanded(child: _field('Stock actual', _stock, hint: '0', numeric: true, isInt: true)),
+                      Expanded(
+                          child: _field('Stock actual', _stock,
+                              hint: '0', numeric: true, isInt: true)),
                       const SizedBox(width: 12),
-                      Expanded(child: _field('Stock mínimo', _stockMin, hint: '5', numeric: true, isInt: true)),
+                      Expanded(
+                          child: _field('Stock mínimo', _stockMin,
+                              hint: '5', numeric: true, isInt: true)),
                     ]),
                     const SizedBox(height: 16),
 
-                    // ─── Categoría con botón crear ─────────────────
+                    // ─── Categoría con botón crear ─────────────
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Expanded(
                           child: DropdownButtonFormField<String?>(
                             value: _catId,
-                            decoration: const InputDecoration(labelText: 'Categoría'),
+                            decoration: const InputDecoration(
+                                labelText: 'Categoría'),
                             items: [
-                              const DropdownMenuItem(value: null, child: Text('Sin categoría')),
-                              ..._categories.map((c) =>
-                                  DropdownMenuItem(value: c.id, child: Text(c.name))),
+                              const DropdownMenuItem(
+                                  value: null,
+                                  child: Text('Sin categoría')),
+                              ..._categories.map((c) => DropdownMenuItem(
+                                  value: c.id, child: Text(c.name))),
                             ],
                             onChanged: (v) => setState(() => _catId = v),
                           ),
                         ),
                         const SizedBox(width: 8),
-                        // Botón crear categoría
                         Container(
                           margin: const EdgeInsets.only(bottom: 2),
                           child: IconButton(
@@ -772,9 +826,11 @@ class _ProductFormState extends State<_ProductForm> {
                     ),
 
                     const SizedBox(height: 16),
-                    _field('Código de barras', _barcode, hint: '8412345000001'),
+                    _field('Código de barras', _barcode,
+                        hint: '8412345000001'),
                     const SizedBox(height: 16),
-                    _field('Descripción', _desc, hint: 'Notas opcionales...', maxLines: 3),
+                    _field('Descripción', _desc,
+                        hint: 'Notas opcionales...', maxLines: 3),
                     const SizedBox(height: 28),
                     SizedBox(
                       width: double.infinity,
@@ -784,8 +840,11 @@ class _ProductFormState extends State<_ProductForm> {
                             ? const SizedBox(
                                 width: 22, height: 22,
                                 child: CircularProgressIndicator(
-                                    strokeWidth: 2.5, color: AppColors.onPrimary))
-                            : Text(isEdit ? 'Guardar cambios' : 'Crear producto'),
+                                    strokeWidth: 2.5,
+                                    color: AppColors.onPrimary))
+                            : Text(isEdit
+                                ? 'Guardar cambios'
+                                : 'Crear producto'),
                       ),
                     ),
                   ],
@@ -799,12 +858,17 @@ class _ProductFormState extends State<_ProductForm> {
   }
 
   Widget _field(String label, TextEditingController ctrl,
-      {String? hint, bool numeric = false, bool isInt = false, int maxLines = 1}) {
+      {String? hint,
+      bool numeric = false,
+      bool isInt = false,
+      int maxLines = 1}) {
     return TextField(
       controller: ctrl,
       maxLines: maxLines,
       keyboardType: numeric
-          ? (isInt ? TextInputType.number : const TextInputType.numberWithOptions(decimal: true))
+          ? (isInt
+              ? TextInputType.number
+              : const TextInputType.numberWithOptions(decimal: true))
           : TextInputType.text,
       decoration: InputDecoration(labelText: label, hintText: hint),
     );
