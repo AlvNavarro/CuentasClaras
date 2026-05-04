@@ -2,8 +2,6 @@ import 'dart:async';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:go_router/go_router.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/formatters.dart';
@@ -95,10 +93,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ? 'Buenas tardes'
             : 'Buenas noches';
 
-    final user = SupabaseService.instance.currentUser;
-    final email = user?.email ?? '';
-    final initial = email.isNotEmpty ? email[0].toUpperCase() : '?';
-
     return SliverAppBar(
       backgroundColor: AppColors.background,
       floating: true,
@@ -111,33 +105,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Text('Panel de control', style: AppTextStyles.h2),
         ],
       ),
-      actions: [
-        GestureDetector(
-          onTap: () {
-            showModalBottomSheet(
-              context: context,
-              isScrollControlled: true,
-              builder: (_) => _ProfileSheet(onSignOut: () => context.go('/login')),
-            );
-          },
-          child: Container(
-            margin: const EdgeInsets.only(right: 16),
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: AppColors.primaryContainer,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Center(
-              child: Text(
-                initial,
-                style: AppTextStyles.label.copyWith(color: AppColors.primary),
-              ),
-            ),
-          ),
-        ),
-      ],
+      // Espacio para el icono de perfil del MainShell
+      actions: const [SizedBox(width: 56)],
     );
   }
 
@@ -149,7 +118,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           child: KpiCard(
             label: 'VENTAS HOY',
             value: Formatters.money(m.todayRevenue),
-            subtitle: '${m.todaySalesCount} transacción${m.todaySalesCount == 1 ? '' : 'es'}',
+            subtitle:
+                '${m.todaySalesCount} transacción${m.todaySalesCount == 1 ? '' : 'es'}',
             icon: Icons.today_rounded,
             accentColor: AppColors.primary,
           ).animate().fadeIn(duration: 500.ms).slideY(begin: 0.3, end: 0),
@@ -194,9 +164,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             value: '${m.lowStockCount}',
             subtitle: 'con stock bajo',
             icon: Icons.warning_amber_rounded,
-            accentColor: m.lowStockCount > 0
-                ? AppColors.danger
-                : AppColors.success,
+            accentColor:
+                m.lowStockCount > 0 ? AppColors.danger : AppColors.success,
           )
               .animate()
               .fadeIn(delay: 200.ms, duration: 500.ms)
@@ -230,7 +199,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
                   color: AppColors.primaryContainer,
                   borderRadius: BorderRadius.circular(100),
@@ -279,7 +249,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         }
                         return Padding(
                           padding: const EdgeInsets.only(top: 6),
-                          child: Text(days[idx], style: AppTextStyles.caption),
+                          child: Text(days[idx],
+                              style: AppTextStyles.caption),
                         );
                       },
                     ),
@@ -326,28 +297,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _lowStockSection() {
-  final items = _metrics!.topLowStock;
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      SectionHeader(
-        title: 'Alertas de stock',
-        action: widget.onGoToAlerts,
-        actionLabel: 'Ver todas',
-      ),
-      const SizedBox(height: 12),
-      ...items.asMap().entries.map(
-            (e) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: AlertTile(product: e.value)
-                  .animate()
-                  .fadeIn(delay: Duration(milliseconds: 300 + e.key * 60))
-                  .slideX(begin: 0.05, end: 0),
+    final items = _metrics!.topLowStock;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SectionHeader(
+          title: 'Alertas de stock',
+          action: widget.onGoToAlerts,
+          actionLabel: 'Ver todas',
+        ),
+        const SizedBox(height: 12),
+        ...items.asMap().entries.map(
+              (e) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: AlertTile(product: e.value)
+                    .animate()
+                    .fadeIn(
+                        delay: Duration(milliseconds: 300 + e.key * 60))
+                    .slideX(begin: 0.05, end: 0),
+              ),
             ),
-          ),
-    ],
-  );
-}
+      ],
+    );
+  }
 
   Widget _recentSalesSection() {
     final sales = _metrics!.recentSales.take(5).toList();
@@ -368,273 +340,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   padding: const EdgeInsets.only(bottom: 8),
                   child: SaleListTile(sale: e.value)
                       .animate()
-                      .fadeIn(delay: Duration(milliseconds: 350 + e.key * 60))
+                      .fadeIn(delay:
+                          Duration(milliseconds: 350 + e.key * 60))
                       .slideX(begin: 0.05, end: 0),
                 ),
               ),
       ],
-    );
-  }
-}
-
-// ─── PROFILE SHEET ────────────────────────────────────────────────────────────
-
-class _ProfileSheet extends StatefulWidget {
-  const _ProfileSheet({required this.onSignOut});
-  final VoidCallback onSignOut;
-  @override
-  State<_ProfileSheet> createState() => _ProfileSheetState();
-}
-
-class _ProfileSheetState extends State<_ProfileSheet> {
-  final _nameCtrl = TextEditingController();
-  final _businessCtrl = TextEditingController();
-  bool _saving = false;
-
-  @override
-  void initState() {
-    super.initState();
-    final user = SupabaseService.instance.currentUser;
-    _nameCtrl.text = user?.userMetadata?['full_name'] as String? ?? '';
-    _businessCtrl.text = user?.userMetadata?['business_name'] as String? ?? '';
-  }
-
-  @override
-  void dispose() {
-    _nameCtrl.dispose();
-    _businessCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _save() async {
-    setState(() => _saving = true);
-    try {
-      await SupabaseService.instance.auth.updateUser(
-        UserAttributes(
-          data: {
-            'full_name': _nameCtrl.text.trim(),
-            'business_name': _businessCtrl.text.trim(),
-          },
-        ),
-      );
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Perfil actualizado correctamente')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error al guardar el perfil')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
-  }
-
-  Future<void> _signOut() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Cerrar sesión'),
-        content: const Text('¿Estás seguro de que quieres cerrar sesión?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.danger),
-            child: const Text('Cerrar sesión'),
-          ),
-        ],
-      ),
-    );
-    if (confirm == true) {
-      await SupabaseService.instance.signOut();
-      if (mounted) {
-        Navigator.pop(context);
-        widget.onSignOut();
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final user = SupabaseService.instance.currentUser;
-    final email = user?.email ?? '';
-    final name = user?.userMetadata?['full_name'] as String? ?? '';
-    final business = user?.userMetadata?['business_name'] as String? ?? '';
-    final initial = email.isNotEmpty ? email[0].toUpperCase() : '?';
-
-    return DraggableScrollableSheet(
-      initialChildSize: 0.78,
-      maxChildSize: 0.95,
-      minChildSize: 0.5,
-      expand: false,
-      builder: (ctx, scroll) => Container(
-        color: AppColors.surface,
-        child: ListView(
-          controller: scroll,
-          padding: const EdgeInsets.fromLTRB(24, 8, 24, 40),
-          children: [
-            // Handle
-            Center(
-              child: Container(
-                width: 40, height: 4,
-                margin: const EdgeInsets.only(bottom: 24),
-                decoration: BoxDecoration(
-                  color: AppColors.border,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-
-            // Avatar con inicial
-            Center(
-              child: Column(
-                children: [
-                  Container(
-                    width: 72, height: 72,
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryContainer,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: AppColors.primary.withOpacity(0.2),
-                        width: 2,
-                      ),
-                    ),
-                    child: Center(
-                      child: Text(
-                        initial,
-                        style: AppTextStyles.h1.copyWith(
-                          color: AppColors.primary,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  if (name.isNotEmpty)
-                    Text(name, style: AppTextStyles.h3),
-                  if (business.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(business,
-                        style: AppTextStyles.body
-                            .copyWith(color: AppColors.textSecondary)),
-                  ],
-                  const SizedBox(height: 4),
-                  Text(email, style: AppTextStyles.caption),
-                ],
-              ),
-            ),
-            const SizedBox(height: 28),
-
-            // Campos editables
-            Text('Nombre completo', style: AppTextStyles.label),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _nameCtrl,
-              decoration: const InputDecoration(
-                hintText: 'Tu nombre',
-                prefixIcon: Icon(Icons.person_outline_rounded),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text('Nombre del negocio', style: AppTextStyles.label),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _businessCtrl,
-              decoration: const InputDecoration(
-                hintText: 'Ej: Panadería García',
-                prefixIcon: Icon(Icons.storefront_outlined),
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Botón guardar
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _saving ? null : _save,
-                child: _saving
-                    ? const SizedBox(
-                        width: 22, height: 22,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.5,
-                          color: AppColors.onPrimary,
-                        ),
-                      )
-                    : const Text('Guardar cambios'),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Info de cuenta
-            AppCard(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('INFORMACIÓN DE CUENTA', style: AppTextStyles.labelSm),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      const Icon(Icons.mail_outline_rounded,
-                          size: 18, color: AppColors.textMuted),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(email, style: AppTextStyles.body),
-                      ),
-                    ],
-                  ),
-                  const Divider(height: 20),
-                  Row(
-                    children: [
-                      const Icon(Icons.shield_outlined,
-                          size: 18, color: AppColors.textMuted),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'Datos protegidos con RLS · Supabase',
-                          style: AppTextStyles.caption,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const Divider(height: 20),
-                  Row(
-                    children: [
-                      const Icon(Icons.info_outline_rounded,
-                          size: 18, color: AppColors.textMuted),
-                      const SizedBox(width: 12),
-                      Text('CuentasClaras v1.0.0',
-                          style: AppTextStyles.caption),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Botón cerrar sesión
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: _signOut,
-                icon: const Icon(Icons.logout_rounded, size: 18),
-                label: const Text('Cerrar sesión'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.danger,
-                  side: const BorderSide(color: AppColors.danger),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

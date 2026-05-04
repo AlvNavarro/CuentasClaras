@@ -109,19 +109,23 @@ class _AlertsScreenState extends State<AlertsScreen>
             onPressed: _load,
             tooltip: 'Actualizar',
           ),
+          const SizedBox(width: 60), // ← espacio para icono de perfil
         ],
-        bottom: TabBar(
-          controller: _tabs,
-          labelStyle: AppTextStyles.label,
-          unselectedLabelStyle: AppTextStyles.body,
-          labelColor: AppColors.primary,
-          unselectedLabelColor: AppColors.textMuted,
-          indicatorColor: AppColors.primary,
-          indicatorSize: TabBarIndicatorSize.tab,
-          tabs: [
-            Tab(text: 'Stock (${_lowStock.length + _outOfStock.length})'),
-            Tab(text: 'Historial (${_notifications.length})'),
-          ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: TabBar(
+            controller: _tabs,
+            labelStyle: AppTextStyles.label,
+            unselectedLabelStyle: AppTextStyles.body,
+            labelColor: AppColors.primary,
+            unselectedLabelColor: AppColors.textMuted,
+            indicatorColor: AppColors.primary,
+            indicatorSize: TabBarIndicatorSize.tab,
+            tabs: [
+              Tab(text: 'Stock (${_lowStock.length + _outOfStock.length})'),
+              Tab(text: 'Historial (${_notifications.length})'),
+            ],
+          ),
         ),
       ),
       body: _loading
@@ -180,7 +184,8 @@ class _AlertsScreenState extends State<AlertsScreen>
                     )
                         .animate()
                         .fadeIn(
-                            delay: Duration(milliseconds: e.key * 50 + 100)),
+                            delay:
+                                Duration(milliseconds: e.key * 50 + 100)),
                   ),
                 ),
           ],

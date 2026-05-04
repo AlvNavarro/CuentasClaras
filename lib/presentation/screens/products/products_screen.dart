@@ -1,8 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:go_router/go_router.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/formatters.dart';
@@ -26,14 +24,13 @@ class _ProductsScreenState extends State<ProductsScreen> {
   bool _loading = true;
   bool _onlyAlerts = false;
   bool get _isAdmin => SupabaseService.instance.isAdmin;
-  late StreamSubscription _sub; // ← añadido
+  late StreamSubscription _sub;
 
   @override
   void initState() {
     super.initState();
     _load();
     _search.addListener(() => _load());
-    // ← suscripción al stream para actualizar en tiempo real
     _sub = InventoryRepository.instance.onStockChanged.listen((_) async {
       await Future.delayed(const Duration(milliseconds: 800));
       if (mounted) _load();
@@ -58,7 +55,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
   @override
   void dispose() {
-    _sub.cancel(); // ← añadido
+    _sub.cancel();
     _search.dispose();
     super.dispose();
   }
@@ -89,21 +86,8 @@ class _ProductsScreenState extends State<ProductsScreen> {
     );
   }
 
-  void _showProfile() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => _EmployeeProfileSheet(
-        onSignOut: () => context.go('/login'),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final email = SupabaseService.instance.currentUser?.email ?? '';
-    final initial = email.isNotEmpty ? email[0].toUpperCase() : '?';
-
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -129,27 +113,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
             },
             tooltip: 'Solo alertas',
           ),
-          if (!_isAdmin)
-            GestureDetector(
-              onTap: _showProfile,
-              child: Container(
-                margin: const EdgeInsets.only(right: 12),
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: AppColors.primaryContainer,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Center(
-                  child: Text(
-                    initial,
-                    style: AppTextStyles.label.copyWith(color: AppColors.primary),
-                  ),
-                ),
-              ),
-            ),
-          const SizedBox(width: 4),
+          const SizedBox(width: 52),
         ],
       ),
       floatingActionButton: _isAdmin
@@ -251,136 +215,6 @@ class _ProductsScreenState extends State<ProductsScreen> {
   }
 }
 
-// ─── PERFIL DEL EMPLEADO ──────────────────────────────────────────────────────
-class _EmployeeProfileSheet extends StatelessWidget {
-  const _EmployeeProfileSheet({required this.onSignOut});
-  final VoidCallback onSignOut;
-
-  @override
-  Widget build(BuildContext context) {
-    final user = SupabaseService.instance.currentUser;
-    final email = user?.email ?? '';
-    final name = user?.userMetadata?['full_name'] as String? ?? '';
-    final initial = email.isNotEmpty ? email[0].toUpperCase() : '?';
-
-    return DraggableScrollableSheet(
-      initialChildSize: 0.5,
-      maxChildSize: 0.75,
-      minChildSize: 0.35,
-      expand: false,
-      builder: (ctx, scroll) => Container(
-        color: AppColors.surface,
-        child: ListView(
-          controller: scroll,
-          padding: const EdgeInsets.fromLTRB(24, 8, 24, 40),
-          children: [
-            Center(
-              child: Container(
-                width: 40, height: 4,
-                margin: const EdgeInsets.only(bottom: 24),
-                decoration: BoxDecoration(
-                  color: AppColors.border,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            Center(
-              child: Column(
-                children: [
-                  Container(
-                    width: 64, height: 64,
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryContainer,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                          color: AppColors.primary.withOpacity(0.2), width: 2),
-                    ),
-                    child: Center(
-                      child: Text(
-                        initial,
-                        style: AppTextStyles.h2.copyWith(color: AppColors.primary),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  if (name.isNotEmpty) Text(name, style: AppTextStyles.h3),
-                  const SizedBox(height: 4),
-                  Text(email, style: AppTextStyles.caption),
-                  const SizedBox(height: 4),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: AppColors.amberContainer,
-                      borderRadius: BorderRadius.circular(100),
-                    ),
-                    child: Text(
-                      'Empleado',
-                      style: AppTextStyles.caption.copyWith(
-                        color: AppColors.amber,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 28),
-            AppCard(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  const Icon(Icons.shield_outlined, size: 18, color: AppColors.textMuted),
-                  const SizedBox(width: 12),
-                  Text('Datos protegidos con RLS · Supabase', style: AppTextStyles.caption),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () async {
-                  final confirm = await showDialog<bool>(
-                    context: context,
-                    builder: (ctx) => AlertDialog(
-                      title: const Text('Cerrar sesión'),
-                      content: const Text('¿Estás seguro de que quieres cerrar sesión?'),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(ctx, false),
-                          child: const Text('Cancelar'),
-                        ),
-                        TextButton(
-                          onPressed: () => Navigator.pop(ctx, true),
-                          style: TextButton.styleFrom(foregroundColor: AppColors.danger),
-                          child: const Text('Cerrar sesión'),
-                        ),
-                      ],
-                    ),
-                  );
-                  if (confirm == true) {
-                    await SupabaseService.instance.signOut();
-                    if (context.mounted) {
-                      Navigator.pop(context);
-                      onSignOut();
-                    }
-                  }
-                },
-                icon: const Icon(Icons.logout_rounded, size: 18),
-                label: const Text('Cerrar sesión'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.danger,
-                  side: const BorderSide(color: AppColors.danger),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 // ─── PRODUCT DETAIL ───────────────────────────────────────────────────────────
 class ProductDetail extends StatelessWidget {
   const ProductDetail({
@@ -431,7 +265,8 @@ class ProductDetail extends StatelessWidget {
                     children: [
                       if (cat != null)
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 4),
                           margin: const EdgeInsets.only(bottom: 8),
                           decoration: BoxDecoration(
                             color: cat.color.withOpacity(0.12),
@@ -455,7 +290,6 @@ class ProductDetail extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 24),
-
             if (isAdmin)
               Row(
                 children: [
@@ -468,9 +302,7 @@ class ProductDetail extends StatelessWidget {
               )
             else
               _infoBox('PRECIO DE VENTA', Formatters.money(product.priceSale), AppColors.primary, Icons.sell_outlined),
-
             const SizedBox(height: 12),
-
             AppCard(
               backgroundColor: product.hasAlert
                   ? (product.isOutOfStock ? AppColors.danger.withOpacity(0.05) : AppColors.warning.withOpacity(0.05))
@@ -524,7 +356,6 @@ class ProductDetail extends StatelessWidget {
                 ],
               ),
             ),
-
             if (product.barcode != null) ...[
               const SizedBox(height: 12),
               AppCard(
@@ -544,7 +375,6 @@ class ProductDetail extends StatelessWidget {
                 ),
               ),
             ],
-
             if (isAdmin) ...[
               const SizedBox(height: 24),
               Row(
@@ -651,7 +481,12 @@ class ProductDetail extends StatelessWidget {
 
 // ─── PRODUCT FORM ─────────────────────────────────────────────────────────────
 class _ProductForm extends StatefulWidget {
-  const _ProductForm({required this.repo, required this.categories, this.product, required this.onSaved});
+  const _ProductForm({
+    required this.repo,
+    required this.categories,
+    this.product,
+    required this.onSaved,
+  });
   final InventoryRepository repo;
   final List<Category> categories;
   final Product? product;
@@ -673,10 +508,12 @@ class _ProductFormState extends State<_ProductForm> {
   String? _catId;
   String _unit = 'ud';
   bool _saving = false;
+  late List<Category> _categories;
 
   @override
   void initState() {
     super.initState();
+    _categories = List.from(widget.categories);
     final p = widget.product;
     if (p != null) {
       _name.text = p.name;
@@ -701,6 +538,100 @@ class _ProductFormState extends State<_ProductForm> {
       c.dispose();
     }
     super.dispose();
+  }
+
+  // ─── CREAR CATEGORÍA ────────────────────────────────────────
+  Future<void> _createCategory() async {
+    final nameCtrl = TextEditingController();
+    final selectedColor = ValueNotifier<String>('#4A7A5C');
+
+    final colors = [
+      '#4A7A5C', '#B85C38', '#C8903A', '#2A5F7A',
+      '#7A2A5F', '#5C4A7A', '#7A5C2A', '#2A7A6F',
+    ];
+
+    final created = await showDialog<Category>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Nueva categoría'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: nameCtrl,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'Nombre de la categoría',
+                hintText: 'Ej: Panadería',
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text('Color:', style: TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            ValueListenableBuilder<String>(
+              valueListenable: selectedColor,
+              builder: (_, current, __) => Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: colors.map((hex) {
+                  final color = Color(int.parse('FF${hex.replaceFirst('#', '')}', radix: 16));
+                  final selected = current == hex;
+                  return GestureDetector(
+                    onTap: () => selectedColor.value = hex,
+                    child: Container(
+                      width: 32, height: 32,
+                      decoration: BoxDecoration(
+                        color: color,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: selected ? Colors.black : Colors.transparent,
+                          width: 3,
+                        ),
+                      ),
+                      child: selected
+                          ? const Icon(Icons.check, color: Colors.white, size: 16)
+                          : null,
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () async {
+              if (nameCtrl.text.trim().isEmpty) return;
+              try {
+                final cat = await widget.repo.upsertCategory(
+                  Category(
+                    id: '',
+                    name: nameCtrl.text.trim(),
+                    colorHex: selectedColor.value,
+                  ),
+                );
+                if (ctx.mounted) Navigator.pop(ctx, cat);
+              } catch (e) {
+                if (ctx.mounted) Navigator.pop(ctx);
+              }
+            },
+            child: const Text('Crear'),
+          ),
+        ],
+      ),
+    );
+
+    if (created != null && mounted) {
+      setState(() {
+        _categories.add(created);
+        _catId = created.id;
+      });
+    }
   }
 
   Future<void> _save() async {
@@ -745,7 +676,10 @@ class _ProductFormState extends State<_ProductForm> {
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: DraggableScrollableSheet(
-        initialChildSize: 0.9, maxChildSize: 0.97, minChildSize: 0.6, expand: false,
+        initialChildSize: 0.9,
+        maxChildSize: 0.97,
+        minChildSize: 0.6,
+        expand: false,
         builder: (ctx, scroll) => Container(
           color: AppColors.surface,
           child: Column(
@@ -754,8 +688,13 @@ class _ProductFormState extends State<_ProductForm> {
                 padding: const EdgeInsets.fromLTRB(24, 16, 16, 0),
                 child: Row(
                   children: [
-                    Expanded(child: Text(isEdit ? 'Editar producto' : 'Nuevo producto', style: AppTextStyles.h3)),
-                    IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded)),
+                    Expanded(
+                        child: Text(
+                            isEdit ? 'Editar producto' : 'Nuevo producto',
+                            style: AppTextStyles.h3)),
+                    IconButton(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.close_rounded)),
                   ],
                 ),
               ),
@@ -765,18 +704,22 @@ class _ProductFormState extends State<_ProductForm> {
                   controller: scroll,
                   padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
                   children: [
-                    _field('Nombre del producto *', _name, hint: 'Ej: Barra de pan artesana'),
+                    _field('Nombre del producto *', _name,
+                        hint: 'Ej: Barra de pan artesana'),
                     const SizedBox(height: 16),
                     Row(children: [
                       Expanded(child: _field('SKU / Referencia *', _sku, hint: 'PAN-001')),
                       const SizedBox(width: 12),
-                      Expanded(child: DropdownButtonFormField<String>(
-                        value: _unit,
-                        decoration: const InputDecoration(labelText: 'Unidad'),
-                        items: ['ud','kg','g','L','ml','bot','pq','lata','bote','sobre']
-                            .map((u) => DropdownMenuItem(value: u, child: Text(u))).toList(),
-                        onChanged: (v) => setState(() => _unit = v ?? 'ud'),
-                      )),
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          value: _unit,
+                          decoration: const InputDecoration(labelText: 'Unidad'),
+                          items: ['ud', 'kg', 'g', 'L', 'ml', 'bot', 'pq', 'lata', 'bote', 'sobre']
+                              .map((u) => DropdownMenuItem(value: u, child: Text(u)))
+                              .toList(),
+                          onChanged: (v) => setState(() => _unit = v ?? 'ud'),
+                        ),
+                      ),
                     ]),
                     const SizedBox(height: 16),
                     Row(children: [
@@ -791,15 +734,43 @@ class _ProductFormState extends State<_ProductForm> {
                       Expanded(child: _field('Stock mínimo', _stockMin, hint: '5', numeric: true, isInt: true)),
                     ]),
                     const SizedBox(height: 16),
-                    DropdownButtonFormField<String?>(
-                      value: _catId,
-                      decoration: const InputDecoration(labelText: 'Categoría'),
-                      items: [
-                        const DropdownMenuItem(value: null, child: Text('Sin categoría')),
-                        ...widget.categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
+
+                    // ─── Categoría con botón crear ─────────────────
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<String?>(
+                            value: _catId,
+                            decoration: const InputDecoration(labelText: 'Categoría'),
+                            items: [
+                              const DropdownMenuItem(value: null, child: Text('Sin categoría')),
+                              ..._categories.map((c) =>
+                                  DropdownMenuItem(value: c.id, child: Text(c.name))),
+                            ],
+                            onChanged: (v) => setState(() => _catId = v),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        // Botón crear categoría
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 2),
+                          child: IconButton(
+                            onPressed: _createCategory,
+                            icon: const Icon(Icons.add_circle_outline_rounded),
+                            color: AppColors.primary,
+                            tooltip: 'Crear nueva categoría',
+                            style: IconButton.styleFrom(
+                              backgroundColor: AppColors.primaryContainer,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                          ),
+                        ),
                       ],
-                      onChanged: (v) => setState(() => _catId = v),
                     ),
+
                     const SizedBox(height: 16),
                     _field('Código de barras', _barcode, hint: '8412345000001'),
                     const SizedBox(height: 16),
@@ -810,8 +781,10 @@ class _ProductFormState extends State<_ProductForm> {
                       child: ElevatedButton(
                         onPressed: _saving ? null : _save,
                         child: _saving
-                            ? const SizedBox(width: 22, height: 22,
-                                child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.onPrimary))
+                            ? const SizedBox(
+                                width: 22, height: 22,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2.5, color: AppColors.onPrimary))
                             : Text(isEdit ? 'Guardar cambios' : 'Crear producto'),
                       ),
                     ),
@@ -828,7 +801,8 @@ class _ProductFormState extends State<_ProductForm> {
   Widget _field(String label, TextEditingController ctrl,
       {String? hint, bool numeric = false, bool isInt = false, int maxLines = 1}) {
     return TextField(
-      controller: ctrl, maxLines: maxLines,
+      controller: ctrl,
+      maxLines: maxLines,
       keyboardType: numeric
           ? (isInt ? TextInputType.number : const TextInputType.numberWithOptions(decimal: true))
           : TextInputType.text,
